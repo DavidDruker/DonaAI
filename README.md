@@ -79,6 +79,8 @@ Start the backend:
 npm run backend
 ```
 
+`npm start` runs the backend for hosted deployments. Use `npx expo start` or `npm run expo` for the mobile development server.
+
 Then start Expo:
 
 ```bash

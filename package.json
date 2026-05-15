@@ -2,14 +2,18 @@
   "name": "secretary-mobile",
   "version": "0.1.0",
   "private": true,
-  "main": "index.js",
+  "main": "backend/server.js",
   "scripts": {
-    "start": "expo start",
+    "start": "node backend/server.js",
+    "expo": "expo start",
     "backend": "node backend/server.js",
     "tunnel": "node backend/tunnel.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
     "babel-preset-expo": "~54.0.10",
