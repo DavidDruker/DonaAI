@@ -2,7 +2,7 @@
   "name": "secretary-mobile",
   "version": "0.1.0",
   "private": true,
-  "main": "backend/server.js",
+  "main": "index.js",
   "scripts": {
     "start": "node backend/server.js",
     "expo": "expo start",
