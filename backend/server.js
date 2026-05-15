@@ -8,13 +8,13 @@ loadEnvFile();
 
 const port = Number(process.env.PORT || 8787);
 const host = process.env.HOST || "0.0.0.0";
-const baseUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${port}`;
-const googleClientId = process.env.GOOGLE_CLIENT_ID || "";
-const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+const baseUrl = cleanEnvValue(process.env.BACKEND_PUBLIC_URL) || `http://localhost:${port}`;
+const googleClientId = cleanEnvValue(process.env.GOOGLE_CLIENT_ID);
+const googleClientSecret = cleanEnvValue(process.env.GOOGLE_CLIENT_SECRET);
 const googleRedirectUri =
-  process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/auth/google/callback`;
-const geminiApiKey = process.env.GEMINI_API_KEY || "";
-const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  cleanEnvValue(process.env.GOOGLE_REDIRECT_URI) || `${baseUrl}/auth/google/callback`;
+const geminiApiKey = cleanEnvValue(process.env.GEMINI_API_KEY);
+const geminiModel = cleanEnvValue(process.env.GEMINI_MODEL) || "gemini-2.5-flash";
 const scopes = [
   "openid",
   "profile",
@@ -38,6 +38,10 @@ const researchKeywords = [
   "find out",
   "apply your findings",
 ];
+
+function cleanEnvValue(value) {
+  return String(value || "").trim();
+}
 
 const server = http.createServer(async (request, response) => {
   try {
