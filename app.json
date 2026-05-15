@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Secretary",
+    "slug": "secretary-mobile",
+    "version": "0.1.0",
+    "scheme": "secretary",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Secretary needs calendar access to read and schedule events you request.",
+          "remindersPermission": "Secretary needs reminders access to read and create reminders you request."
+        }
+      ],
+      "expo-web-browser"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.daviddruker.secretary",
+      "infoPlist": {
+        "NSCalendarsUsageDescription": "Secretary needs calendar access to read and schedule events you request.",
+        "NSRemindersUsageDescription": "Secretary needs reminders access to read and create reminders you request.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.daviddruker.secretary",
+      "permissions": [
+        "READ_CALENDAR",
+        "WRITE_CALENDAR",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "19eb2a6d-8e06-4ccf-9e95-bb181de5ff29"
+      }
+    }
+  }
+}
