@@ -1,5 +1,10 @@
 import { supabase, supabaseConfigured } from "./supabaseClient";
 
+const authRedirectUrl =
+  process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL ||
+  process.env.EXPO_PUBLIC_BACKEND_URL ||
+  undefined;
+
 export async function getCurrentSession() {
   if (!supabaseConfigured) {
     return {
@@ -42,6 +47,7 @@ export async function signUpAccount({ email, password, name }) {
     email,
     password,
     options: {
+      emailRedirectTo: authRedirectUrl,
       data: {
         name,
       },

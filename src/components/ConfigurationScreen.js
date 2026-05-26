@@ -11,6 +11,46 @@ import {
 } from "react-native";
 
 import LabeledInput from "./LabeledInput";
+import OptionPicker from "./OptionPicker";
+
+const toneOptions = [
+  { label: "Direct", value: "Direct and warm" },
+  { label: "Formal", value: "Formal and polished" },
+  { label: "Casual", value: "Casual and friendly" },
+  { label: "Brief", value: "Brief and practical" },
+];
+
+const startOptions = [
+  { label: "8 AM", value: "08:00" },
+  { label: "9 AM", value: "09:00" },
+  { label: "10 AM", value: "10:00" },
+  { label: "11 AM", value: "11:00" },
+];
+
+const endOptions = [
+  { label: "4 PM", value: "16:00" },
+  { label: "5 PM", value: "17:00" },
+  { label: "6 PM", value: "18:00" },
+  { label: "7 PM", value: "19:00" },
+];
+
+const durationOptions = [
+  { label: "15 min", value: "15" },
+  { label: "30 min", value: "30" },
+  { label: "45 min", value: "45" },
+  { label: "60 min", value: "60" },
+];
+
+function getSignoffOptions(name) {
+  const cleanName = name || "David";
+
+  return [
+    { label: "Best", value: `Best,\n${cleanName}` },
+    { label: "Thanks", value: `Thanks,\n${cleanName}` },
+    { label: "Sincerely", value: `Sincerely,\n${cleanName}` },
+    { label: "Regards", value: `Regards,\n${cleanName}` },
+  ];
+}
 
 export default function ConfigurationScreen({
   message,
@@ -42,38 +82,36 @@ export default function ConfigurationScreen({
               placeholder="David"
               value={preferences.name}
             />
-            <LabeledInput
+            <OptionPicker
               label="Tone"
-              onChangeText={(value) => onChange("tone", value)}
-              placeholder="Direct and warm"
+              onChange={(value) => onChange("tone", value)}
+              options={toneOptions}
               value={preferences.tone}
             />
             <View style={styles.twoColumnRow}>
-              <LabeledInput
+              <OptionPicker
                 label="Start"
-                onChangeText={(value) => onChange("workingHoursStart", value)}
-                placeholder="09:00"
+                onChange={(value) => onChange("workingHoursStart", value)}
+                options={startOptions}
                 value={preferences.workingHoursStart}
               />
-              <LabeledInput
+              <OptionPicker
                 label="End"
-                onChangeText={(value) => onChange("workingHoursEnd", value)}
-                placeholder="17:00"
+                onChange={(value) => onChange("workingHoursEnd", value)}
+                options={endOptions}
                 value={preferences.workingHoursEnd}
               />
             </View>
-            <LabeledInput
-              keyboardType="number-pad"
+            <OptionPicker
               label="Default meeting minutes"
-              onChangeText={(value) => onChange("defaultMeetingMinutes", value)}
-              placeholder="30"
+              onChange={(value) => onChange("defaultMeetingMinutes", value)}
+              options={durationOptions}
               value={preferences.defaultMeetingMinutes}
             />
-            <LabeledInput
+            <OptionPicker
               label="Email sign-off"
-              multiline
-              onChangeText={(value) => onChange("emailSignoff", value)}
-              placeholder={"Best,\nDavid"}
+              onChange={(value) => onChange("emailSignoff", value)}
+              options={getSignoffOptions(preferences.name)}
               value={preferences.emailSignoff}
             />
 

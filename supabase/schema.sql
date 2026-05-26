@@ -107,3 +107,49 @@ create trigger set_user_preferences_updated_at
 before update on public.user_preferences
 for each row
 execute function public.set_updated_at();
+
+create table if not exists public.contacts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  email text not null,
+  notes text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.contacts enable row level security;
+
+create index if not exists contacts_user_id_name_idx on public.contacts(user_id, lower(name));
+
+drop policy if exists "Users can read their own contacts" on public.contacts;
+create policy "Users can read their own contacts"
+on public.contacts
+for select
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert their own contacts" on public.contacts;
+create policy "Users can insert their own contacts"
+on public.contacts
+for insert
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update their own contacts" on public.contacts;
+create policy "Users can update their own contacts"
+on public.contacts
+for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete their own contacts" on public.contacts;
+create policy "Users can delete their own contacts"
+on public.contacts
+for delete
+using (auth.uid() = user_id);
+
+drop trigger if exists set_contacts_updated_at on public.contacts;
+
+create trigger set_contacts_updated_at
+before update on public.contacts
+for each row
+execute function public.set_updated_at();

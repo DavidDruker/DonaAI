@@ -4,6 +4,8 @@ export async function parseAssistantPrompt(
   prompt,
   clarificationContext = null,
   chatHistory = [],
+  contacts = [],
+  preferences = null,
 ) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const response = await fetch(`${backendUrl}/api/assistant/action`, {
@@ -15,6 +17,8 @@ export async function parseAssistantPrompt(
       prompt,
       clarificationContext,
       chatHistory,
+      contacts,
+      preferences,
       timezone,
       now: new Date().toISOString(),
     }),

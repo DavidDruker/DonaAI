@@ -44,8 +44,14 @@ import {
   signOutAccount,
   signUpAccount,
 } from "./services/accountStore";
+import {
+  deleteContact,
+  loadContacts,
+  saveContact,
+} from "./services/contactsStore";
 import AuthScreen from "./components/AuthScreen";
 import ConfigurationScreen from "./components/ConfigurationScreen";
+import ContactsPanel from "./components/ContactsPanel";
 
 const initialConnections = {
   email: getEmailAccessSummary(),
@@ -86,6 +92,18 @@ function getDefaultPreferencesForName(name) {
   };
 }
 
+function getUpdatedSignoff(current, nextName) {
+  const previousName = current.name || "David";
+  const signoffPrefix = String(current.emailSignoff || "").split("\n")[0] || "Best,";
+  const presetPrefixes = new Set(["Best,", "Thanks,", "Sincerely,", "Regards,"]);
+
+  if (!presetPrefixes.has(signoffPrefix)) {
+    return current.emailSignoff;
+  }
+
+  return `${signoffPrefix}\n${nextName || previousName}`;
+}
+
 export default function SecretaryApp() {
   const [screen, setScreen] = useState("loading");
   const [authForm, setAuthForm] = useState({
@@ -96,6 +114,8 @@ export default function SecretaryApp() {
   const [authMessage, setAuthMessage] = useState("");
   const [session, setSession] = useState(null);
   const [preferences, setPreferences] = useState(defaultPreferences);
+  const [contacts, setContacts] = useState([]);
+  const [contactsMessage, setContactsMessage] = useState("");
   const [connections, setConnections] = useState(initialConnections);
   const [prompt, setPrompt] = useState("");
   const [emailConnection, setEmailConnection] = useState(null);
@@ -125,6 +145,12 @@ export default function SecretaryApp() {
     }
   }, [screen]);
 
+  useEffect(() => {
+    if (session?.user?.id) {
+      refreshContacts(session.user.id);
+    }
+  }, [session?.user?.id]);
+
   async function bootstrapAccount() {
     const result = await getCurrentSession();
 
@@ -148,6 +174,7 @@ export default function SecretaryApp() {
     setPreferences((current) => ({
       ...current,
       [key]: value,
+      ...(key === "name" ? { emailSignoff: getUpdatedSignoff(current, value) } : {}),
     }));
   }
 
@@ -220,6 +247,7 @@ export default function SecretaryApp() {
       },
     ]);
     setScreen("app");
+    setSettingsOpen(false);
   }
 
   async function loadAccountPreferences(userId) {
@@ -250,6 +278,51 @@ export default function SecretaryApp() {
     setScreen("configure");
   }
 
+  async function refreshContacts(userId = session?.user?.id) {
+    const result = await loadContacts(userId);
+
+    if (result.error) {
+      setContactsMessage(result.error.message);
+      return;
+    }
+
+    setContacts(result.contacts);
+    setContactsMessage("");
+  }
+
+  async function addContact(contact) {
+    if (!contact.name.trim() || !contact.email.trim()) {
+      setContactsMessage("Add a contact name and email.");
+      return false;
+    }
+
+    if (!session?.user?.id) {
+      setContactsMessage("Log in before adding contacts.");
+      return false;
+    }
+
+    const result = await saveContact(session.user.id, contact);
+
+    if (result.error) {
+      setContactsMessage(result.error.message);
+      return false;
+    }
+
+    await refreshContacts(session.user.id);
+    return true;
+  }
+
+  async function removeContact(contactId) {
+    const result = await deleteContact(contactId);
+
+    if (result.error) {
+      setContactsMessage(result.error.message);
+      return;
+    }
+
+    await refreshContacts();
+  }
+
   async function signOut() {
     await signOutAccount();
     setSession(null);
@@ -259,7 +332,14 @@ export default function SecretaryApp() {
       password: "",
     });
     setPreferences(defaultPreferences);
+    setContacts([]);
     setScreen("login");
+  }
+
+  function openConfiguration() {
+    setAuthMessage("");
+    setSettingsOpen(false);
+    setScreen("configure");
   }
 
   async function refreshDeviceAccess() {
@@ -358,6 +438,7 @@ export default function SecretaryApp() {
 
     const historyForBackend = messages;
     appendMessage("user", cleanPrompt);
+    setPrompt("");
     setLoadingKey("assistant");
 
     try {
@@ -365,6 +446,8 @@ export default function SecretaryApp() {
         cleanPrompt,
         clarificationContext,
         historyForBackend,
+        contacts,
+        preferences,
       );
 
       if (intent.action === "clarification_question") {
@@ -385,14 +468,12 @@ export default function SecretaryApp() {
           turns: nextTurns,
         });
         appendAssistantMessage(intent.confirmation);
-        setPrompt("");
         return;
       }
 
       if (intent.action === "chat_response") {
         setClarificationContext(null);
         appendAssistantMessage(intent.confirmation || "I can help with that.");
-        setPrompt("");
         return;
       }
 
@@ -402,7 +483,6 @@ export default function SecretaryApp() {
         setConnections((current) => ({ ...current, reminders }));
         appendAssistantMessage(result.detail);
         setClarificationContext(null);
-        setPrompt("");
         return;
       }
 
@@ -412,7 +492,6 @@ export default function SecretaryApp() {
         setConnections((current) => ({ ...current, reminders }));
         appendAssistantMessage(result.detail);
         setClarificationContext(null);
-        setPrompt("");
         return;
       }
 
@@ -422,7 +501,6 @@ export default function SecretaryApp() {
         setConnections((current) => ({ ...current, calendar }));
         appendAssistantMessage(result.detail);
         setClarificationContext(null);
-        setPrompt("");
         return;
       }
 
@@ -430,7 +508,6 @@ export default function SecretaryApp() {
         const result = await listGoogleCalendarEvents(getGoogleSessionId(), intent);
         appendAssistantMessage(result.detail);
         setClarificationContext(null);
-        setPrompt("");
         return;
       }
 
@@ -438,7 +515,6 @@ export default function SecretaryApp() {
         const result = await sendGmailMessage(getGoogleSessionId(), intent);
         appendAssistantMessage(result.detail);
         setClarificationContext(null);
-        setPrompt("");
         return;
       }
 
@@ -502,7 +578,7 @@ export default function SecretaryApp() {
     return (
       <ConfigurationScreen
         message={authMessage}
-        onBack={() => setScreen("signup")}
+        onBack={() => setScreen(session ? "app" : "signup")}
         onChange={updatePreference}
         onComplete={completeConfiguration}
         preferences={preferences}
@@ -603,59 +679,81 @@ export default function SecretaryApp() {
                   pressed && styles.pressedButton,
                 ]}
               >
-                <Text style={styles.closeText}>×</Text>
+                <Text style={styles.closeText}>X</Text>
               </Pressable>
             </View>
 
-            <ConnectionRow
-              detail={connections.email.detail}
-              emailProviders={getEmailProviders()}
-              loadingKey={loadingKey}
-              onEmailPress={connectEmail}
-              status={connections.email.status}
-              title="Email"
-            />
-            <ConnectionRow
-              actionLabel="Allow"
-              detail={connections.calendar.detail}
-              loading={loadingKey === "calendar"}
-              onPress={connectCalendar}
-              status={connections.calendar.status}
-              title="Calendar"
-            />
-            <ConnectionRow
-              actionLabel="Allow"
-              detail={connections.reminders.detail}
-              loading={loadingKey === "reminders"}
-              onPress={connectReminders}
-              status={connections.reminders.status}
-              title="Reminders"
-            />
+            <ScrollView
+              contentContainerStyle={styles.drawerBody}
+              keyboardShouldPersistTaps="handled"
+            >
+              <ConnectionRow
+                detail={connections.email.detail}
+                emailProviders={getEmailProviders()}
+                loadingKey={loadingKey}
+                onEmailPress={connectEmail}
+                status={connections.email.status}
+                title="Email"
+              />
+              <ConnectionRow
+                actionLabel="Allow"
+                detail={connections.calendar.detail}
+                loading={loadingKey === "calendar"}
+                onPress={connectCalendar}
+                status={connections.calendar.status}
+                title="Calendar"
+              />
+              <ConnectionRow
+                actionLabel="Allow"
+                detail={connections.reminders.detail}
+                loading={loadingKey === "reminders"}
+                onPress={connectReminders}
+                status={connections.reminders.status}
+                title="Reminders"
+              />
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={refreshDeviceAccess}
-              style={({ pressed }) => [
-                styles.drawerRefresh,
-                pressed && styles.pressedButton,
-              ]}
-            >
-              {loadingKey === "refresh" ? (
-                <ActivityIndicator color="#f8fafc" size="small" />
-              ) : (
-                <Text style={styles.drawerRefreshText}>Refresh status</Text>
-              )}
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={signOut}
-              style={({ pressed }) => [
-                styles.drawerSignOut,
-                pressed && styles.pressedButton,
-              ]}
-            >
-              <Text style={styles.drawerSignOutText}>Log out</Text>
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={refreshDeviceAccess}
+                style={({ pressed }) => [
+                  styles.drawerRefresh,
+                  pressed && styles.pressedButton,
+                ]}
+              >
+                {loadingKey === "refresh" ? (
+                  <ActivityIndicator color="#f8fafc" size="small" />
+                ) : (
+                  <Text style={styles.drawerRefreshText}>Refresh status</Text>
+                )}
+              </Pressable>
+              <ContactsPanel
+                contacts={contacts}
+                loading={loadingKey === "contacts"}
+                message={contactsMessage}
+                onDelete={removeContact}
+                onSave={addContact}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={openConfiguration}
+                style={({ pressed }) => [
+                  styles.drawerSecondaryAction,
+                  pressed && styles.pressedButton,
+                ]}
+              >
+                <Text style={styles.drawerSecondaryActionText}>Edit preferences</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={signOut}
+                style={({ pressed }) => [
+                  styles.drawerSignOut,
+                  pressed && styles.pressedButton,
+                ]}
+              >
+                <Text style={styles.drawerSignOutText}>Log out</Text>
+              </Pressable>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -929,6 +1027,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 4,
   },
+  drawerBody: {
+    gap: 12,
+    paddingBottom: 18,
+  },
   drawerTitle: {
     color: "#f8fafc",
     fontSize: 22,
@@ -1039,6 +1141,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: "center",
     minHeight: 40,
+  },
+  drawerSecondaryAction: {
+    alignItems: "center",
+    backgroundColor: "#152133",
+    borderColor: "#34445f",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 40,
+  },
+  drawerSecondaryActionText: {
+    color: "#f8fafc",
+    fontWeight: "900",
   },
   drawerSignOutText: {
     color: "#f8fafc",

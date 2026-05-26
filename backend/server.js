@@ -175,6 +175,28 @@ async function parseAssistantAction(request, response) {
         }))
         .filter((message) => message.role && message.text)
     : [];
+  const contacts = Array.isArray(body.contacts)
+    ? body.contacts
+        .slice(0, 100)
+        .map((contact) => ({
+          name: String(contact?.name || "").trim(),
+          email: String(contact?.email || "").trim(),
+        }))
+        .filter((contact) => contact.name && isValidEmailAddress(contact.email))
+    : [];
+  const preferences =
+    body.preferences && typeof body.preferences === "object"
+      ? {
+          name: String(body.preferences.name || "").trim(),
+          tone: String(body.preferences.tone || "").trim(),
+          workingHoursStart: String(body.preferences.workingHoursStart || "").trim(),
+          workingHoursEnd: String(body.preferences.workingHoursEnd || "").trim(),
+          defaultMeetingMinutes: String(
+            body.preferences.defaultMeetingMinutes || "",
+          ).trim(),
+          emailSignoff: String(body.preferences.emailSignoff || "").trim(),
+        }
+      : {};
 
   if (!prompt) {
     return sendJson(response, 400, {
@@ -213,6 +235,12 @@ async function parseAssistantAction(request, response) {
         .map((message, index) => `${index + 1}. ${message.role}: ${message.text}`)
         .join("\n")
     : "none";
+  const contactsText = contacts.length
+    ? contacts
+        .map((contact, index) => `${index + 1}. ${contact.name}: ${contact.email}`)
+        .join("\n")
+    : "none";
+  const preferencesText = formatUserPreferences(preferences);
   const shouldResearch = needsResearch(effectivePrompt);
   let researchBrief = "";
 
@@ -242,6 +270,7 @@ async function parseAssistantAction(request, response) {
               "",
               "General chat rules:",
               "- Return chat_response for general conversation, explanations, advice, brainstorming, and information requests that do not ask you to create an email, reminder, alarm, or calendar event.",
+              "- Follow the user's saved preferences when tone, working hours, meeting defaults, or sign-off are relevant.",
               "- Use the recent chat history as context when it helps answer naturally.",
               "- Keep chat answers clear, useful, and conversational. Use short paragraphs when explaining something.",
               "- If the user asks for current facts or research, use available research findings when supplied and say when the answer may need verification.",
@@ -277,7 +306,8 @@ async function parseAssistantAction(request, response) {
               "",
               "Email rules:",
               "- Return send_email only when the user clearly asks to send an email.",
-              "- Require a recipient email address in the user request. If only a name is given, return unsupported and ask for the address in confirmation.",
+              "- If the user gives a recipient name instead of an email address, use the matching saved contact from the contact list.",
+              "- Require a recipient email address in the user request or a clear matching saved contact. If only a name is given and it does not match exactly one saved contact, return clarification_question and ask which email address to use.",
               "- Check that email_to looks like a valid email address before returning send_email. It must contain one @, a domain, and a top-level domain, with no spaces.",
               "- If the provided email address looks invalid or incomplete, return clarification_question and ask the user for the correct email address.",
               "- Do not claim the recipient mailbox exists. The app can validate email format and domain delivery only, not whether an individual inbox exists.",
@@ -303,6 +333,7 @@ async function parseAssistantAction(request, response) {
               "- Match the requested tone only when one is explicitly provided.",
               "- Write a useful subject line when the user does not provide one.",
               "- Format the email with a greeting, separated paragraphs, and a professional sign-off. Include blank lines between those sections.",
+              "- End emails with the saved email sign-off exactly when one is supplied. Do not invent a different sender name.",
               "- Keep the email body complete enough to satisfy the request, but avoid unnecessary length.",
               "",
               "Unsupported rules:",
@@ -312,6 +343,8 @@ async function parseAssistantAction(request, response) {
               `Current time: ${now.toISOString()}`,
               `Timezone: ${timezone}`,
               `Recent chat history:\n${chatHistoryText}`,
+              `Saved contacts:\n${contactsText}`,
+              `Saved user preferences:\n${preferencesText}`,
               researchBrief
                 ? `Research findings to apply:\n${researchBrief}`
                 : "Research findings to apply: none supplied.",
@@ -574,6 +607,36 @@ function getGeminiErrorMessage(status, payload) {
   }
 
   return message || "Gemini could not understand the request.";
+}
+
+function formatUserPreferences(preferences) {
+  const lines = [];
+
+  if (preferences.name) {
+    lines.push(`Preferred name: ${preferences.name}`);
+  }
+
+  if (preferences.tone) {
+    lines.push(`Tone: ${preferences.tone}`);
+  }
+
+  if (preferences.workingHoursStart || preferences.workingHoursEnd) {
+    lines.push(
+      `Working hours: ${preferences.workingHoursStart || "unspecified"} to ${
+        preferences.workingHoursEnd || "unspecified"
+      }`,
+    );
+  }
+
+  if (preferences.defaultMeetingMinutes) {
+    lines.push(`Default meeting duration: ${preferences.defaultMeetingMinutes} minutes`);
+  }
+
+  if (preferences.emailSignoff) {
+    lines.push(`Email sign-off:\n${preferences.emailSignoff}`);
+  }
+
+  return lines.length ? lines.join("\n") : "none";
 }
 
 function needsResearch(prompt) {
