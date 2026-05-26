@@ -79,13 +79,23 @@ create table if not exists public.user_preferences (
   user_id uuid primary key references auth.users(id) on delete cascade,
   preferred_name text not null default '',
   tone text not null default 'Direct and warm',
-  working_hours_start text not null default '09:00',
-  working_hours_end text not null default '17:00',
+  email_formality text not null default 'Professional',
+  email_length text not null default 'Medium',
   default_meeting_minutes integer not null default 30,
   email_signoff text not null default '',
+  additional_instructions text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.user_preferences
+add column if not exists email_formality text not null default 'Professional';
+
+alter table public.user_preferences
+add column if not exists email_length text not null default 'Medium';
+
+alter table public.user_preferences
+add column if not exists additional_instructions text not null default '';
 
 alter table public.user_preferences enable row level security;
 

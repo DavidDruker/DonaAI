@@ -189,12 +189,15 @@ async function parseAssistantAction(request, response) {
       ? {
           name: String(body.preferences.name || "").trim(),
           tone: String(body.preferences.tone || "").trim(),
-          workingHoursStart: String(body.preferences.workingHoursStart || "").trim(),
-          workingHoursEnd: String(body.preferences.workingHoursEnd || "").trim(),
+          emailFormality: String(body.preferences.emailFormality || "").trim(),
+          emailLength: String(body.preferences.emailLength || "").trim(),
           defaultMeetingMinutes: String(
             body.preferences.defaultMeetingMinutes || "",
           ).trim(),
           emailSignoff: String(body.preferences.emailSignoff || "").trim(),
+          additionalInstructions: String(
+            body.preferences.additionalInstructions || "",
+          ).trim(),
         }
       : {};
 
@@ -270,7 +273,7 @@ async function parseAssistantAction(request, response) {
               "",
               "General chat rules:",
               "- Return chat_response for general conversation, explanations, advice, brainstorming, and information requests that do not ask you to create an email, reminder, alarm, or calendar event.",
-              "- Follow the user's saved preferences when tone, working hours, meeting defaults, or sign-off are relevant.",
+              "- Follow the user's saved preferences when tone, email style, meeting defaults, sign-off, or additional instructions are relevant.",
               "- Use the recent chat history as context when it helps answer naturally.",
               "- Keep chat answers clear, useful, and conversational. Use short paragraphs when explaining something.",
               "- If the user asks for current facts or research, use available research findings when supplied and say when the answer may need verification.",
@@ -620,12 +623,12 @@ function formatUserPreferences(preferences) {
     lines.push(`Tone: ${preferences.tone}`);
   }
 
-  if (preferences.workingHoursStart || preferences.workingHoursEnd) {
-    lines.push(
-      `Working hours: ${preferences.workingHoursStart || "unspecified"} to ${
-        preferences.workingHoursEnd || "unspecified"
-      }`,
-    );
+  if (preferences.emailFormality) {
+    lines.push(`Email formality: ${preferences.emailFormality}`);
+  }
+
+  if (preferences.emailLength) {
+    lines.push(`Email length: ${preferences.emailLength}`);
   }
 
   if (preferences.defaultMeetingMinutes) {
@@ -634,6 +637,10 @@ function formatUserPreferences(preferences) {
 
   if (preferences.emailSignoff) {
     lines.push(`Email sign-off:\n${preferences.emailSignoff}`);
+  }
+
+  if (preferences.additionalInstructions) {
+    lines.push(`Additional instructions: ${preferences.additionalInstructions}`);
   }
 
   return lines.length ? lines.join("\n") : "none";

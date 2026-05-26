@@ -24,6 +24,7 @@ export default function ContactsPanel({
   onSave,
 }) {
   const [form, setForm] = useState(emptyForm);
+  const [adding, setAdding] = useState(false);
 
   function updateField(key, value) {
     setForm((current) => ({
@@ -37,6 +38,7 @@ export default function ContactsPanel({
 
     if (saved) {
       setForm(emptyForm);
+      setAdding(false);
     }
   }
 
@@ -44,46 +46,29 @@ export default function ContactsPanel({
     <View style={styles.panel}>
       <View style={styles.panelHeader}>
         <Text style={styles.panelTitle}>Contacts</Text>
-        {loading ? <ActivityIndicator color="#8ea4ff" size="small" /> : null}
+        <View style={styles.headerActions}>
+          {loading ? <ActivityIndicator color="#8ea4ff" size="small" /> : null}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setAdding((current) => !current)}
+            style={({ pressed }) => [
+              styles.addToggle,
+              pressed && styles.pressedButton,
+            ]}
+          >
+            <Text style={styles.addToggleText}>{adding ? "Close" : "Add"}</Text>
+          </Pressable>
+        </View>
       </View>
-
-      <LabeledInput
-        label="Name"
-        onChangeText={(value) => updateField("name", value)}
-        placeholder="Sarah"
-        value={form.name}
-      />
-      <LabeledInput
-        autoCapitalize="none"
-        keyboardType="email-address"
-        label="Email"
-        onChangeText={(value) => updateField("email", value)}
-        placeholder="sarah@example.com"
-        value={form.email}
-      />
-      <LabeledInput
-        label="Notes"
-        onChangeText={(value) => updateField("notes", value)}
-        placeholder="Optional"
-        value={form.notes}
-      />
-
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={submit}
-        style={({ pressed }) => [
-          styles.saveButton,
-          pressed && styles.pressedButton,
-        ]}
-      >
-        <Text style={styles.saveButtonText}>Add contact</Text>
-      </Pressable>
 
       <View style={styles.contactList}>
         {contacts.length === 0 ? (
-          <Text style={styles.emptyText}>No contacts yet.</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No contacts yet.</Text>
+            <Text style={styles.emptyText}>
+              Add people here, then ask Dona to email them by name.
+            </Text>
+          </View>
         ) : (
           contacts.map((contact) => (
             <View key={contact.id} style={styles.contactRow}>
@@ -105,6 +90,47 @@ export default function ContactsPanel({
           ))
         )}
       </View>
+
+      {adding ? (
+        <View style={styles.addPanel}>
+          <Text style={styles.addPanelTitle}>Add contact</Text>
+          <LabeledInput
+            label="Name"
+            onChangeText={(value) => updateField("name", value)}
+            placeholder="Sarah"
+            value={form.name}
+          />
+          <LabeledInput
+            autoCapitalize="none"
+            keyboardType="email-address"
+            label="Email"
+            onChangeText={(value) => updateField("email", value)}
+            placeholder="sarah@example.com"
+            value={form.email}
+          />
+          <LabeledInput
+            label="Notes"
+            onChangeText={(value) => updateField("notes", value)}
+            placeholder="Optional"
+            value={form.notes}
+          />
+
+          {message ? <Text style={styles.message}>{message}</Text> : null}
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={submit}
+            style={({ pressed }) => [
+              styles.saveButton,
+              pressed && styles.pressedButton,
+            ]}
+          >
+            <Text style={styles.saveButtonText}>Save contact</Text>
+          </Pressable>
+        </View>
+      ) : message ? (
+        <Text style={styles.message}>{message}</Text>
+      ) : null}
     </View>
   );
 }
@@ -125,7 +151,35 @@ const styles = StyleSheet.create({
   },
   panelTitle: {
     color: "#f8fafc",
-    fontSize: 15,
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  headerActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  addToggle: {
+    alignItems: "center",
+    backgroundColor: "#8ea4ff",
+    borderRadius: 8,
+    justifyContent: "center",
+    minHeight: 34,
+    paddingHorizontal: 13,
+  },
+  addToggleText: {
+    color: "#081018",
+    fontWeight: "900",
+  },
+  addPanel: {
+    borderColor: "#26364f",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 12,
+    padding: 12,
+  },
+  addPanelTitle: {
+    color: "#f8fafc",
     fontWeight: "900",
   },
   saveButton: {
@@ -140,7 +194,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   contactList: {
-    gap: 8,
+    gap: 10,
   },
   contactRow: {
     alignItems: "center",
@@ -149,7 +203,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
-    padding: 10,
+    padding: 12,
   },
   contactTextWrap: {
     flex: 1,
@@ -176,8 +230,20 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   emptyText: {
-    color: "#7f8ba0",
-    fontSize: 12,
+    color: "#aeb8c8",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  emptyState: {
+    borderColor: "#26364f",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 14,
+  },
+  emptyTitle: {
+    color: "#f8fafc",
+    fontWeight: "900",
   },
   message: {
     color: "#fca5a5",

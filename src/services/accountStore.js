@@ -128,10 +128,11 @@ export async function saveUserPreferences(userId, preferences) {
       user_id: userId,
       preferred_name: preferences.name,
       tone: preferences.tone,
-      working_hours_start: preferences.workingHoursStart,
-      working_hours_end: preferences.workingHoursEnd,
+      email_formality: preferences.emailFormality,
+      email_length: preferences.emailLength,
       default_meeting_minutes: Number(preferences.defaultMeetingMinutes) || 30,
       email_signoff: preferences.emailSignoff,
+      additional_instructions: preferences.additionalInstructions,
       updated_at: new Date().toISOString(),
     },
     {
@@ -166,9 +167,10 @@ function mapPreferenceRow(row) {
   return {
     name: row.preferred_name || "",
     tone: row.tone || "",
-    workingHoursStart: row.working_hours_start || "",
-    workingHoursEnd: row.working_hours_end || "",
+    emailFormality: row.email_formality || "Professional",
+    emailLength: row.email_length || "Medium",
     defaultMeetingMinutes: String(row.default_meeting_minutes || 30),
     emailSignoff: row.email_signoff || "",
+    additionalInstructions: row.additional_instructions || "",
   };
 }

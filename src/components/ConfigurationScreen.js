@@ -1,4 +1,8 @@
 import {
+  useMemo,
+  useState,
+} from "react";
+import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,20 +22,21 @@ const toneOptions = [
   { label: "Formal", value: "Formal and polished" },
   { label: "Casual", value: "Casual and friendly" },
   { label: "Brief", value: "Brief and practical" },
+  { label: "Detailed", value: "Detailed and explanatory" },
+  { label: "Executive", value: "Executive and concise" },
 ];
 
-const startOptions = [
-  { label: "8 AM", value: "08:00" },
-  { label: "9 AM", value: "09:00" },
-  { label: "10 AM", value: "10:00" },
-  { label: "11 AM", value: "11:00" },
+const formalityOptions = [
+  { label: "Neutral", value: "Neutral" },
+  { label: "Professional", value: "Professional" },
+  { label: "Very formal", value: "Very formal" },
+  { label: "Relaxed", value: "Relaxed" },
 ];
 
-const endOptions = [
-  { label: "4 PM", value: "16:00" },
-  { label: "5 PM", value: "17:00" },
-  { label: "6 PM", value: "18:00" },
-  { label: "7 PM", value: "19:00" },
+const emailLengthOptions = [
+  { label: "Short", value: "Short" },
+  { label: "Medium", value: "Medium" },
+  { label: "Detailed", value: "Detailed" },
 ];
 
 const durationOptions = [
@@ -39,6 +44,7 @@ const durationOptions = [
   { label: "30 min", value: "30" },
   { label: "45 min", value: "45" },
   { label: "60 min", value: "60" },
+  { label: "90 min", value: "90" },
 ];
 
 function getSignoffOptions(name) {
@@ -59,6 +65,87 @@ export default function ConfigurationScreen({
   onComplete,
   preferences,
 }) {
+  const [step, setStep] = useState(0);
+  const signoffOptions = useMemo(
+    () => getSignoffOptions(preferences.name),
+    [preferences.name],
+  );
+  const steps = [
+    {
+      kicker: "Setup",
+      title: "Tell Dona who you are.",
+      content: (
+        <>
+          <LabeledInput
+            label="Preferred name"
+            onChangeText={(value) => onChange("name", value)}
+            placeholder="David"
+            value={preferences.name}
+          />
+          <OptionPicker
+            label="Tone"
+            onChange={(value) => onChange("tone", value)}
+            options={toneOptions}
+            value={preferences.tone}
+          />
+        </>
+      ),
+    },
+    {
+      kicker: "Writing",
+      title: "Set email style.",
+      content: (
+        <>
+          <OptionPicker
+            label="Email formality"
+            onChange={(value) => onChange("emailFormality", value)}
+            options={formalityOptions}
+            value={preferences.emailFormality}
+          />
+          <OptionPicker
+            label="Email length"
+            onChange={(value) => onChange("emailLength", value)}
+            options={emailLengthOptions}
+            value={preferences.emailLength}
+          />
+          <OptionPicker
+            label="Email sign-off"
+            onChange={(value) => onChange("emailSignoff", value)}
+            options={signoffOptions}
+            value={preferences.emailSignoff}
+          />
+        </>
+      ),
+    },
+    {
+      kicker: "Scheduling",
+      title: "Choose calendar defaults.",
+      content: (
+        <OptionPicker
+          label="Default meeting minutes"
+          onChange={(value) => onChange("defaultMeetingMinutes", value)}
+          options={durationOptions}
+          value={preferences.defaultMeetingMinutes}
+        />
+      ),
+    },
+    {
+      kicker: "Memory",
+      title: "Anything else Dona should know?",
+      content: (
+        <LabeledInput
+          label="Optional note"
+          multiline
+          onChangeText={(value) => onChange("additionalInstructions", value)}
+          placeholder="Example: Prefer concise morning summaries. Ask before sending sensitive emails."
+          value={preferences.additionalInstructions}
+        />
+      ),
+    },
+  ];
+  const currentStep = steps[step];
+  const isLastStep = step === steps.length - 1;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -71,72 +158,56 @@ export default function ConfigurationScreen({
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.authHeader}>
-            <Text style={styles.kicker}>Setup</Text>
-            <Text style={styles.authTitle}>Configure Dona.</Text>
+            <Text style={styles.kicker}>{currentStep.kicker}</Text>
+            <Text style={styles.authTitle}>{currentStep.title}</Text>
+            <Text style={styles.stepText}>
+              Step {step + 1} of {steps.length}
+            </Text>
           </View>
 
           <View style={styles.authPanel}>
-            <LabeledInput
-              label="Preferred name"
-              onChangeText={(value) => onChange("name", value)}
-              placeholder="David"
-              value={preferences.name}
-            />
-            <OptionPicker
-              label="Tone"
-              onChange={(value) => onChange("tone", value)}
-              options={toneOptions}
-              value={preferences.tone}
-            />
-            <View style={styles.twoColumnRow}>
-              <OptionPicker
-                label="Start"
-                onChange={(value) => onChange("workingHoursStart", value)}
-                options={startOptions}
-                value={preferences.workingHoursStart}
-              />
-              <OptionPicker
-                label="End"
-                onChange={(value) => onChange("workingHoursEnd", value)}
-                options={endOptions}
-                value={preferences.workingHoursEnd}
-              />
-            </View>
-            <OptionPicker
-              label="Default meeting minutes"
-              onChange={(value) => onChange("defaultMeetingMinutes", value)}
-              options={durationOptions}
-              value={preferences.defaultMeetingMinutes}
-            />
-            <OptionPicker
-              label="Email sign-off"
-              onChange={(value) => onChange("emailSignoff", value)}
-              options={getSignoffOptions(preferences.name)}
-              value={preferences.emailSignoff}
-            />
+            {currentStep.content}
 
             {message ? <Text style={styles.formMessage}>{message}</Text> : null}
 
             <Pressable
               accessibilityRole="button"
-              onPress={onComplete}
+              onPress={() => {
+                if (isLastStep) {
+                  onComplete();
+                  return;
+                }
+
+                setStep((current) => current + 1);
+              }}
               style={({ pressed }) => [
                 styles.primaryButton,
                 pressed && styles.pressedButton,
               ]}
             >
-              <Text style={styles.primaryButtonText}>Start using Dona</Text>
+              <Text style={styles.primaryButtonText}>
+                {isLastStep ? "Start using Dona" : "Continue"}
+              </Text>
             </Pressable>
 
             <Pressable
               accessibilityRole="button"
-              onPress={onBack}
+              onPress={() => {
+                if (step > 0) {
+                  setStep((current) => current - 1);
+                  return;
+                }
+
+                onBack();
+              }}
               style={({ pressed }) => [
                 styles.textButton,
                 pressed && styles.pressedButton,
               ]}
             >
-              <Text style={styles.textButtonText}>Back</Text>
+              <Text style={styles.textButtonText}>
+                {step > 0 ? "Previous" : "Back"}
+              </Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -184,10 +255,6 @@ const styles = StyleSheet.create({
     gap: 14,
     padding: 16,
   },
-  twoColumnRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
   primaryButton: {
     alignItems: "center",
     backgroundColor: "#8ea4ff",
@@ -214,6 +281,12 @@ const styles = StyleSheet.create({
     color: "#fca5a5",
     fontSize: 13,
     lineHeight: 18,
+  },
+  stepText: {
+    color: "#7f8ba0",
+    fontSize: 13,
+    fontWeight: "800",
+    marginTop: 8,
   },
   pressedButton: {
     opacity: 0.78,

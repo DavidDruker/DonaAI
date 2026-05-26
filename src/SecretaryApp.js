@@ -79,10 +79,11 @@ const initialMessages = [
 const defaultPreferences = {
   name: "David",
   tone: "Direct and warm",
-  workingHoursStart: "09:00",
-  workingHoursEnd: "17:00",
+  emailFormality: "Professional",
+  emailLength: "Medium",
   defaultMeetingMinutes: "30",
   emailSignoff: "Best,\nDavid",
+  additionalInstructions: "",
 };
 
 function getDefaultPreferencesForName(name) {
