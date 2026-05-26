@@ -16,6 +16,8 @@
     "node": "22.x"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "^2.106.2",
     "babel-preset-expo": "~54.0.10",
     "expo": "~54.0.34",
     "expo-auth-session": "~7.0.11",
@@ -25,7 +27,8 @@
     "expo-dev-client": "~6.0.21",
     "expo-web-browser": "~15.0.11",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "react-native-url-polyfill": "^3.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",

@@ -1,0 +1,183 @@
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+
+import LabeledInput from "./LabeledInput";
+
+export default function ConfigurationScreen({
+  message,
+  onBack,
+  onChange,
+  onComplete,
+  preferences,
+}) {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.keyboardView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.authContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.authHeader}>
+            <Text style={styles.kicker}>Setup</Text>
+            <Text style={styles.authTitle}>Configure Dona.</Text>
+          </View>
+
+          <View style={styles.authPanel}>
+            <LabeledInput
+              label="Preferred name"
+              onChangeText={(value) => onChange("name", value)}
+              placeholder="David"
+              value={preferences.name}
+            />
+            <LabeledInput
+              label="Tone"
+              onChangeText={(value) => onChange("tone", value)}
+              placeholder="Direct and warm"
+              value={preferences.tone}
+            />
+            <View style={styles.twoColumnRow}>
+              <LabeledInput
+                label="Start"
+                onChangeText={(value) => onChange("workingHoursStart", value)}
+                placeholder="09:00"
+                value={preferences.workingHoursStart}
+              />
+              <LabeledInput
+                label="End"
+                onChangeText={(value) => onChange("workingHoursEnd", value)}
+                placeholder="17:00"
+                value={preferences.workingHoursEnd}
+              />
+            </View>
+            <LabeledInput
+              keyboardType="number-pad"
+              label="Default meeting minutes"
+              onChangeText={(value) => onChange("defaultMeetingMinutes", value)}
+              placeholder="30"
+              value={preferences.defaultMeetingMinutes}
+            />
+            <LabeledInput
+              label="Email sign-off"
+              multiline
+              onChangeText={(value) => onChange("emailSignoff", value)}
+              placeholder={"Best,\nDavid"}
+              value={preferences.emailSignoff}
+            />
+
+            {message ? <Text style={styles.formMessage}>{message}</Text> : null}
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={onComplete}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.pressedButton,
+              ]}
+            >
+              <Text style={styles.primaryButtonText}>Start using Dona</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={onBack}
+              style={({ pressed }) => [
+                styles.textButton,
+                pressed && styles.pressedButton,
+              ]}
+            >
+              <Text style={styles.textButtonText}>Back</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#081018",
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  authContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 20,
+  },
+  authHeader: {
+    marginBottom: 22,
+  },
+  kicker: {
+    color: "#8ea4ff",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  authTitle: {
+    color: "#f8fafc",
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: 0,
+    lineHeight: 36,
+    marginTop: 8,
+  },
+  authPanel: {
+    backgroundColor: "#101a29",
+    borderColor: "#26364f",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 14,
+    padding: 16,
+  },
+  twoColumnRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  primaryButton: {
+    alignItems: "center",
+    backgroundColor: "#8ea4ff",
+    borderRadius: 8,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 16,
+  },
+  primaryButtonText: {
+    color: "#081018",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  textButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+  },
+  textButtonText: {
+    color: "#c7d2fe",
+    fontWeight: "800",
+  },
+  formMessage: {
+    color: "#fca5a5",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  pressedButton: {
+    opacity: 0.78,
+  },
+});

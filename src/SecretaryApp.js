@@ -35,6 +35,17 @@ import {
   parseAssistantPrompt,
   sendGmailMessage,
 } from "./services/assistantApi";
+import {
+  getCurrentSession,
+  loadUserPreferences,
+  onAuthStateChange,
+  saveUserPreferences,
+  signInAccount,
+  signOutAccount,
+  signUpAccount,
+} from "./services/accountStore";
+import AuthScreen from "./components/AuthScreen";
+import ConfigurationScreen from "./components/ConfigurationScreen";
 
 const initialConnections = {
   email: getEmailAccessSummary(),
@@ -58,7 +69,33 @@ const initialMessages = [
   },
 ];
 
+const defaultPreferences = {
+  name: "David",
+  tone: "Direct and warm",
+  workingHoursStart: "09:00",
+  workingHoursEnd: "17:00",
+  defaultMeetingMinutes: "30",
+  emailSignoff: "Best,\nDavid",
+};
+
+function getDefaultPreferencesForName(name) {
+  return {
+    ...defaultPreferences,
+    name,
+    emailSignoff: `Best,\n${name}`,
+  };
+}
+
 export default function SecretaryApp() {
+  const [screen, setScreen] = useState("loading");
+  const [authForm, setAuthForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+  const [authMessage, setAuthMessage] = useState("");
+  const [session, setSession] = useState(null);
+  const [preferences, setPreferences] = useState(defaultPreferences);
   const [connections, setConnections] = useState(initialConnections);
   const [prompt, setPrompt] = useState("");
   const [emailConnection, setEmailConnection] = useState(null);
@@ -69,8 +106,161 @@ export default function SecretaryApp() {
   const scrollViewRef = useRef(null);
 
   useEffect(() => {
-    refreshDeviceAccess();
+    bootstrapAccount();
   }, []);
+
+  useEffect(() => {
+    const subscription = onAuthStateChange((nextSession) => {
+      setSession(nextSession);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (screen === "app") {
+      refreshDeviceAccess();
+    }
+  }, [screen]);
+
+  async function bootstrapAccount() {
+    const result = await getCurrentSession();
+
+    if (result.error || !result.session) {
+      setScreen("signup");
+      return;
+    }
+
+    setSession(result.session);
+    await loadAccountPreferences(result.session.user.id);
+  }
+
+  function updateAuthField(key, value) {
+    setAuthForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function updatePreference(key, value) {
+    setPreferences((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  async function submitAuth() {
+    const name = authForm.name.trim();
+    const email = authForm.email.trim();
+    const password = authForm.password;
+
+    if (!email || !password || (screen === "signup" && !name)) {
+      setAuthMessage("Fill in the required fields first.");
+      return;
+    }
+
+    if (screen === "signup") {
+      const result = await signUpAccount({
+        email,
+        password,
+        name,
+      });
+
+      if (result.error) {
+        setAuthMessage(result.error.message);
+        return;
+      }
+
+      setPreferences((current) => getDefaultPreferencesForName(name || current.name));
+
+      if (!result.session) {
+        setAuthMessage("Check your email to confirm the account, then log in.");
+        setScreen("login");
+        return;
+      }
+
+      setSession(result.session);
+      setAuthMessage("");
+      setScreen("configure");
+      return;
+    }
+
+    const result = await signInAccount({
+      email,
+      password,
+    });
+
+    if (result.error || !result.session) {
+      setAuthMessage(result.error?.message || "Login failed.");
+      return;
+    }
+
+    setSession(result.session);
+    setAuthMessage("");
+    await loadAccountPreferences(result.session.user.id);
+  }
+
+  async function completeConfiguration() {
+    if (session?.user?.id) {
+      const result = await saveUserPreferences(session.user.id, preferences);
+
+      if (result.error) {
+        setAuthMessage(result.error.message);
+        return;
+      }
+    }
+
+    setMessages([
+      {
+        id: "welcome",
+        role: "assistant",
+        text: `Hi ${preferences.name || "there"}. I can chat, answer questions, and help with email, calendar, reminders, and alarm-style reminders.`,
+      },
+    ]);
+    setScreen("app");
+  }
+
+  async function loadAccountPreferences(userId) {
+    const result = await loadUserPreferences(userId);
+
+    if (result.error) {
+      setAuthMessage(result.error.message);
+      setScreen("configure");
+      return;
+    }
+
+    if (result.preferences) {
+      setPreferences({
+        ...defaultPreferences,
+        ...result.preferences,
+      });
+      setMessages([
+        {
+          id: "welcome",
+          role: "assistant",
+          text: `Hi ${result.preferences.name || "there"}. I can chat, answer questions, and help with email, calendar, reminders, and alarm-style reminders.`,
+        },
+      ]);
+      setScreen("app");
+      return;
+    }
+
+    setScreen("configure");
+  }
+
+  async function signOut() {
+    await signOutAccount();
+    setSession(null);
+    setAuthForm({
+      name: "",
+      email: "",
+      password: "",
+    });
+    setPreferences(defaultPreferences);
+    setScreen("login");
+  }
 
   async function refreshDeviceAccess() {
     setLoadingKey("refresh");
@@ -280,6 +470,46 @@ export default function SecretaryApp() {
     ]);
   }
 
+  if (screen === "signup" || screen === "login") {
+    return (
+      <AuthScreen
+        form={authForm}
+        message={authMessage}
+        mode={screen}
+        onChange={updateAuthField}
+        onSubmit={submitAuth}
+        onToggleMode={() => {
+          setAuthMessage("");
+          setScreen(screen === "signup" ? "login" : "signup");
+        }}
+      />
+    );
+  }
+
+  if (screen === "loading") {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.loadingScreen}>
+          <ActivityIndicator color="#8ea4ff" size="large" />
+          <Text style={styles.loadingText}>Loading Dona...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === "configure") {
+    return (
+      <ConfigurationScreen
+        message={authMessage}
+        onBack={() => setScreen("signup")}
+        onChange={updatePreference}
+        onComplete={completeConfiguration}
+        preferences={preferences}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -415,6 +645,16 @@ export default function SecretaryApp() {
               ) : (
                 <Text style={styles.drawerRefreshText}>Refresh status</Text>
               )}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={signOut}
+              style={({ pressed }) => [
+                styles.drawerSignOut,
+                pressed && styles.pressedButton,
+              ]}
+            >
+              <Text style={styles.drawerSignOutText}>Log out</Text>
             </Pressable>
           </View>
         </View>
@@ -791,6 +1031,28 @@ const styles = StyleSheet.create({
   drawerRefreshText: {
     color: "#f8fafc",
     fontWeight: "900",
+  },
+  drawerSignOut: {
+    alignItems: "center",
+    borderColor: "#34445f",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 40,
+  },
+  drawerSignOutText: {
+    color: "#f8fafc",
+    fontWeight: "900",
+  },
+  loadingScreen: {
+    alignItems: "center",
+    flex: 1,
+    gap: 12,
+    justifyContent: "center",
+  },
+  loadingText: {
+    color: "#aeb8c8",
+    fontWeight: "800",
   },
   pressedButton: {
     opacity: 0.78,
