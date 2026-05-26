@@ -27,6 +27,7 @@ import {
   getEmailProviders,
   getGoogleSessionId,
   refreshEmailConnection,
+  setGoogleSessionUserId,
   startEmailAuthorization,
 } from "./services/emailAccess";
 import {
@@ -123,7 +124,9 @@ export default function SecretaryApp() {
   const [loadingKey, setLoadingKey] = useState("");
   const [clarificationContext, setClarificationContext] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("chat");
   const scrollViewRef = useRef(null);
+  const gmailConnected = connections.email.status === "authorized";
 
   useEffect(() => {
     bootstrapAccount();
@@ -146,6 +149,18 @@ export default function SecretaryApp() {
   }, [screen]);
 
   useEffect(() => {
+    setGoogleSessionUserId(session?.user?.id || "");
+
+    if (!session?.user?.id) {
+      setConnections((current) => ({
+        ...current,
+        email: getEmailAccessSummary(),
+      }));
+      setEmailConnection(null);
+    }
+  }, [session?.user?.id]);
+
+  useEffect(() => {
     if (session?.user?.id) {
       refreshContacts(session.user.id);
     }
@@ -160,6 +175,7 @@ export default function SecretaryApp() {
     }
 
     setSession(result.session);
+    setGoogleSessionUserId(result.session.user.id);
     await loadAccountPreferences(result.session.user.id);
   }
 
@@ -209,6 +225,7 @@ export default function SecretaryApp() {
       }
 
       setSession(result.session);
+      setGoogleSessionUserId(result.session.user.id);
       setAuthMessage("");
       setScreen("configure");
       return;
@@ -225,6 +242,7 @@ export default function SecretaryApp() {
     }
 
     setSession(result.session);
+    setGoogleSessionUserId(result.session.user.id);
     setAuthMessage("");
     await loadAccountPreferences(result.session.user.id);
   }
@@ -326,6 +344,7 @@ export default function SecretaryApp() {
   async function signOut() {
     await signOutAccount();
     setSession(null);
+    setGoogleSessionUserId("");
     setAuthForm({
       name: "",
       email: "",
@@ -359,6 +378,7 @@ export default function SecretaryApp() {
       }
     } else {
       setEmailConnection(null);
+      setActiveTab("chat");
     }
 
     setConnections({
@@ -597,7 +617,9 @@ export default function SecretaryApp() {
           <View style={styles.header}>
             <View>
               <Text style={styles.kicker}>Secretary</Text>
-              <Text style={styles.title}>Dona</Text>
+              <Text style={styles.title}>
+                {activeTab === "contacts" ? "Contacts" : "Dona"}
+              </Text>
             </View>
             <Pressable
               accessibilityRole="button"
@@ -609,51 +631,108 @@ export default function SecretaryApp() {
             </Pressable>
           </View>
 
-          <ScrollView
-            ref={scrollViewRef}
-            contentContainerStyle={styles.chatScrollContent}
-            keyboardShouldPersistTaps="handled"
-            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-            style={styles.chatScroll}
-          >
-            <View style={styles.chatPanel}>
-              {messages.map((message) => (
-                <ChatBubble key={message.id} message={message} />
-              ))}
-              {loadingKey === "assistant" ? (
-                <View style={[styles.bubble, styles.assistantBubble]}>
-                  <ActivityIndicator color="#8ea4ff" size="small" />
-                </View>
-              ) : null}
-            </View>
-          </ScrollView>
-
-          <View style={styles.promptPanel}>
-            <TextInput
-              accessibilityLabel="Secretary prompt"
-              multiline
-              onChangeText={setPrompt}
-              placeholder="Message Secretary..."
-              placeholderTextColor="#707783"
-              returnKeyType="default"
-              style={styles.input}
-              value={prompt}
-            />
-            <Pressable
-              accessibilityRole="button"
-              onPress={submitPrompt}
-              style={({ pressed }) => [
-                styles.sendButton,
-                pressed && styles.pressedButton,
-              ]}
+          {activeTab === "contacts" && gmailConnected ? (
+            <ScrollView
+              contentContainerStyle={styles.tabScrollContent}
+              keyboardShouldPersistTaps="handled"
+              style={styles.chatScroll}
             >
-              {loadingKey === "assistant" ? (
-                <ActivityIndicator color="#081018" size="small" />
-              ) : (
-                <Text style={styles.sendText}>Send</Text>
-              )}
-            </Pressable>
-          </View>
+              <ContactsPanel
+                contacts={contacts}
+                loading={loadingKey === "contacts"}
+                message={contactsMessage}
+                onDelete={removeContact}
+                onSave={addContact}
+              />
+            </ScrollView>
+          ) : (
+            <>
+              <ScrollView
+                ref={scrollViewRef}
+                contentContainerStyle={styles.chatScrollContent}
+                keyboardShouldPersistTaps="handled"
+                onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+                style={styles.chatScroll}
+              >
+                <View style={styles.chatPanel}>
+                  {messages.map((message) => (
+                    <ChatBubble key={message.id} message={message} />
+                  ))}
+                  {loadingKey === "assistant" ? (
+                    <View style={[styles.bubble, styles.assistantBubble]}>
+                      <ActivityIndicator color="#8ea4ff" size="small" />
+                    </View>
+                  ) : null}
+                </View>
+              </ScrollView>
+
+              <View style={styles.promptPanel}>
+                <TextInput
+                  accessibilityLabel="Secretary prompt"
+                  multiline
+                  onChangeText={setPrompt}
+                  placeholder="Message Secretary..."
+                  placeholderTextColor="#707783"
+                  returnKeyType="default"
+                  style={styles.input}
+                  value={prompt}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={submitPrompt}
+                  style={({ pressed }) => [
+                    styles.sendButton,
+                    pressed && styles.pressedButton,
+                  ]}
+                >
+                  {loadingKey === "assistant" ? (
+                    <ActivityIndicator color="#081018" size="small" />
+                  ) : (
+                    <Text style={styles.sendText}>Send</Text>
+                  )}
+                </Pressable>
+              </View>
+            </>
+          )}
+
+          {gmailConnected ? (
+            <View style={styles.tabBar}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setActiveTab("chat")}
+                style={[
+                  styles.tabButton,
+                  activeTab === "chat" && styles.tabButtonActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabButtonText,
+                    activeTab === "chat" && styles.tabButtonTextActive,
+                  ]}
+                >
+                  Chat
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setActiveTab("contacts")}
+                style={[
+                  styles.tabButton,
+                  activeTab === "contacts" && styles.tabButtonActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabButtonText,
+                    activeTab === "contacts" && styles.tabButtonTextActive,
+                  ]}
+                >
+                  Contacts
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
       <Modal
@@ -695,6 +774,11 @@ export default function SecretaryApp() {
                 status={connections.email.status}
                 title="Email"
               />
+              {!gmailConnected ? (
+                <Text style={styles.drawerHelperText}>
+                  Your Dona account stores preferences and contacts. Gmail is a separate Google permission so Dona can read, send, and schedule for you.
+                </Text>
+              ) : null}
               <ConnectionRow
                 actionLabel="Allow"
                 detail={connections.calendar.detail}
@@ -726,13 +810,6 @@ export default function SecretaryApp() {
                   <Text style={styles.drawerRefreshText}>Refresh status</Text>
                 )}
               </Pressable>
-              <ContactsPanel
-                contacts={contacts}
-                loading={loadingKey === "contacts"}
-                message={contactsMessage}
-                onDelete={removeContact}
-                onSave={addContact}
-              />
               <Pressable
                 accessibilityRole="button"
                 onPress={openConfiguration}
@@ -975,6 +1052,36 @@ const styles = StyleSheet.create({
   chatScrollContent: {
     paddingBottom: 14,
   },
+  tabScrollContent: {
+    paddingBottom: 14,
+  },
+  tabBar: {
+    backgroundColor: "#101a29",
+    borderColor: "#26364f",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+    padding: 6,
+  },
+  tabButton: {
+    alignItems: "center",
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 38,
+  },
+  tabButtonActive: {
+    backgroundColor: "#8ea4ff",
+  },
+  tabButtonText: {
+    color: "#aeb8c8",
+    fontWeight: "900",
+  },
+  tabButtonTextActive: {
+    color: "#081018",
+  },
   bubble: {
     borderRadius: 8,
     maxWidth: "88%",
@@ -1133,6 +1240,11 @@ const styles = StyleSheet.create({
   drawerRefreshText: {
     color: "#f8fafc",
     fontWeight: "900",
+  },
+  drawerHelperText: {
+    color: "#aeb8c8",
+    fontSize: 12,
+    lineHeight: 17,
   },
   drawerSignOut: {
     alignItems: "center",

@@ -1,5 +1,6 @@
 create table if not exists public.google_oauth_sessions (
   session_id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
   status text not null default 'idle',
   provider text not null default 'gmail',
   detail text not null default '',
@@ -12,6 +13,12 @@ create table if not exists public.google_oauth_sessions (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.google_oauth_sessions
+add column if not exists user_id uuid references auth.users(id) on delete cascade;
+
+create index if not exists google_oauth_sessions_user_id_idx
+on public.google_oauth_sessions(user_id);
 
 alter table public.google_oauth_sessions enable row level security;
 

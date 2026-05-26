@@ -1420,6 +1420,7 @@ async function supabaseRequest(method, pathAndQuery, body, extraHeaders = {}) {
 function serializeStoredSession(sessionId, session) {
   return {
     session_id: sessionId,
+    user_id: getUserIdFromSessionId(sessionId),
     status: session.status || "idle",
     provider: session.provider || "gmail",
     detail: session.detail || "",
@@ -1431,6 +1432,13 @@ function serializeStoredSession(sessionId, session) {
     scopes,
     updated_at: new Date().toISOString(),
   };
+}
+
+function getUserIdFromSessionId(sessionId) {
+  const prefix = "supabase-user-";
+  const value = String(sessionId || "");
+
+  return value.startsWith(prefix) ? value.slice(prefix.length) : null;
 }
 
 function deserializeStoredSession(row) {

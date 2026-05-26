@@ -1,10 +1,14 @@
 import * as WebBrowser from "expo-web-browser";
 
 const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:8787";
-const emailSessionId = `mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+let emailSessionId = "";
+
+export function setGoogleSessionUserId(userId) {
+  emailSessionId = userId ? `supabase-user-${userId}` : "";
+}
 
 export function getGoogleSessionId() {
-  return emailSessionId;
+  return emailSessionId || "anonymous-mobile-session";
 }
 
 export function getEmailAccessSummary(connection) {
@@ -26,7 +30,7 @@ export function getEmailAccessSummary(connection) {
 
   return {
     status: "needs_oauth",
-    detail: "Connect Gmail through the backend OAuth flow.",
+    detail: "Connect Gmail once so Dona can use your Google mail and calendar permissions.",
     provider: "",
   };
 }
@@ -55,7 +59,7 @@ export async function startEmailAuthorization(providerKey) {
   }
 
   const authUrl = `${backendUrl}/auth/google/start?sessionId=${encodeURIComponent(
-    emailSessionId,
+    getGoogleSessionId(),
   )}`;
 
   await WebBrowser.openBrowserAsync(authUrl);
@@ -65,7 +69,7 @@ export async function startEmailAuthorization(providerKey) {
 export async function refreshEmailConnection() {
   try {
     const statusUrl = `${backendUrl}/api/email/status?sessionId=${encodeURIComponent(
-      emailSessionId,
+      getGoogleSessionId(),
     )}`;
     const response = await fetch(statusUrl);
     const payload = await response.json();
