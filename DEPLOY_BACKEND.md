@@ -37,6 +37,9 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 GEMINI_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-2.5-flash
+SUPABASE_URL=https://YOUR-SUPABASE-PROJECT.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+GOOGLE_TOKEN_ENCRYPTION_KEY=a-long-random-secret-for-token-encryption
 ```
 
 Do not upload `.env`. Use the hosting provider's environment variable screen.
@@ -67,6 +70,6 @@ npx expo start --clear --go --lan -p 8081
 
 ## Current Limitation
 
-The backend currently stores Google OAuth sessions in memory. It now refreshes Google access tokens while the Render process is alive, but Render restarts, redeploys, and free-service sleeps still clear connected sessions.
+The backend stores Google OAuth sessions in Supabase when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured. Stored Google tokens are encrypted before they are written to Supabase. Set `GOOGLE_TOKEN_ENCRYPTION_KEY` to a long random secret; if it is not set, the backend falls back to `GOOGLE_CLIENT_SECRET` for encryption.
 
-A production version should add a database and encrypted token storage so users stay connected across Render restarts.
+Run `supabase/schema.sql` in the Supabase SQL editor before deploying the Supabase-backed backend.

@@ -16,6 +16,10 @@ const googleRedirectUri =
   cleanEnvValue(process.env.GOOGLE_REDIRECT_URI) || `${baseUrl}/auth/google/callback`;
 const geminiApiKey = cleanEnvValue(process.env.GEMINI_API_KEY);
 const geminiModel = cleanEnvValue(process.env.GEMINI_MODEL) || "gemini-2.5-flash";
+const supabaseUrl = cleanEnvValue(process.env.SUPABASE_URL);
+const supabaseServiceRoleKey = cleanEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY);
+const tokenEncryptionSecret =
+  cleanEnvValue(process.env.GOOGLE_TOKEN_ENCRYPTION_KEY) || googleClientSecret;
 const scopes = [
   "openid",
   "https://www.googleapis.com/auth/userinfo.profile",
@@ -115,11 +119,11 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-function startGoogleAuth(url, response) {
+async function startGoogleAuth(url, response) {
   const sessionId = url.searchParams.get("sessionId") || crypto.randomUUID();
 
   if (!googleClientId || !googleClientSecret) {
-    sessions.set(sessionId, {
+    await saveSession(sessionId, {
       status: "missing_config",
       provider: "gmail",
       detail: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required.",
@@ -135,7 +139,7 @@ function startGoogleAuth(url, response) {
     );
   }
 
-  sessions.set(sessionId, {
+  await saveSession(sessionId, {
     status: "pending",
     provider: "gmail",
   });
@@ -586,7 +590,7 @@ function delay(milliseconds) {
 async function sendGmailMessage(request, response) {
   const body = await readJsonBody(request);
   const sessionId = String(body.sessionId || "");
-  const session = sessionId ? sessions.get(sessionId) : null;
+  const session = await getSession(sessionId);
 
   if (!session || session.status !== "connected") {
     return sendJson(response, 401, {
@@ -623,7 +627,7 @@ async function sendGmailMessage(request, response) {
   const tokenResult = await getValidGoogleAccessToken(session);
 
   if (!tokenResult.ok) {
-    sessions.set(sessionId, {
+    await saveSession(sessionId, {
       ...session,
       status: "error",
       detail: tokenResult.detail,
@@ -745,7 +749,7 @@ async function checkEmailDomain(value) {
 async function createGoogleCalendarEvent(request, response) {
   const body = await readJsonBody(request);
   const sessionId = String(body.sessionId || "");
-  const session = sessionId ? sessions.get(sessionId) : null;
+  const session = await getSession(sessionId);
 
   if (!session || session.status !== "connected") {
     return sendJson(response, 401, {
@@ -757,7 +761,7 @@ async function createGoogleCalendarEvent(request, response) {
   const tokenResult = await getValidGoogleAccessToken(session);
 
   if (!tokenResult.ok) {
-    sessions.set(sessionId, {
+    await saveSession(sessionId, {
       ...session,
       status: "error",
       detail: tokenResult.detail,
@@ -833,7 +837,7 @@ async function createGoogleCalendarEvent(request, response) {
 async function listGoogleCalendarEvents(request, response) {
   const body = await readJsonBody(request);
   const sessionId = String(body.sessionId || "");
-  const session = sessionId ? sessions.get(sessionId) : null;
+  const session = await getSession(sessionId);
 
   if (!session || session.status !== "connected") {
     return sendJson(response, 401, {
@@ -845,7 +849,7 @@ async function listGoogleCalendarEvents(request, response) {
   const tokenResult = await getValidGoogleAccessToken(session);
 
   if (!tokenResult.ok) {
-    sessions.set(sessionId, {
+    await saveSession(sessionId, {
       ...session,
       status: "error",
       detail: tokenResult.detail,
@@ -1083,14 +1087,14 @@ async function completeGoogleAuth(url, response) {
     return sendHtml(response, 400, page("Missing session", "No session was provided."));
   }
 
-  const session = sessions.get(sessionId);
+  const session = await getSession(sessionId);
 
   if (!session || session.status !== "pending") {
     return sendHtml(response, 400, page("Invalid session", "This Gmail sign-in session is no longer valid."));
   }
 
   if (error || !code) {
-    sessions.set(sessionId, {
+    await saveSession(sessionId, {
       status: "error",
       provider: "gmail",
       detail: error || "No authorization code was returned.",
@@ -1120,7 +1124,7 @@ async function completeGoogleAuth(url, response) {
   const tokenPayload = await tokenResponse.json();
 
   if (!tokenResponse.ok) {
-    sessions.set(sessionId, {
+    await saveSession(sessionId, {
       status: "error",
       provider: "gmail",
       detail: tokenPayload.error_description || tokenPayload.error || "Token exchange failed.",
@@ -1133,7 +1137,7 @@ async function completeGoogleAuth(url, response) {
     );
   }
 
-  sessions.set(sessionId, {
+  await saveSession(sessionId, {
     status: "connected",
     provider: "gmail",
     detail: "Gmail connected.",
@@ -1154,9 +1158,9 @@ async function completeGoogleAuth(url, response) {
   );
 }
 
-function sendEmailStatus(url, response) {
+async function sendEmailStatus(url, response) {
   const sessionId = url.searchParams.get("sessionId");
-  const session = sessionId ? sessions.get(sessionId) : null;
+  const session = await getSession(sessionId);
 
   if (!session) {
     return sendJson(response, 200, {
@@ -1227,10 +1231,189 @@ async function getValidGoogleAccessToken(session) {
   session.expiresIn = tokenPayload.expires_in;
   session.expiresAt = Date.now() + Number(tokenPayload.expires_in || 0) * 1000;
 
+  if (session.sessionId) {
+    await saveSession(session.sessionId, session);
+  }
+
   return {
     ok: true,
     accessToken: session.accessToken,
   };
+}
+
+async function getSession(sessionId) {
+  if (!sessionId) {
+    return null;
+  }
+
+  const cached = sessions.get(sessionId);
+
+  if (cached) {
+    return {
+      ...cached,
+      sessionId,
+    };
+  }
+
+  const stored = await getStoredSession(sessionId);
+
+  if (!stored) {
+    return null;
+  }
+
+  sessions.set(sessionId, stored);
+
+  return {
+    ...stored,
+    sessionId,
+  };
+}
+
+async function saveSession(sessionId, session) {
+  if (!sessionId) {
+    return;
+  }
+
+  const nextSession = {
+    ...session,
+  };
+  delete nextSession.sessionId;
+  sessions.set(sessionId, nextSession);
+  await saveStoredSession(sessionId, nextSession);
+}
+
+async function getStoredSession(sessionId) {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+
+  try {
+    const rows = await supabaseRequest(
+      "GET",
+      `/google_oauth_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=*`,
+    );
+    const row = Array.isArray(rows) ? rows[0] : null;
+
+    if (!row) {
+      return null;
+    }
+
+    return deserializeStoredSession(row);
+  } catch (error) {
+    console.error("Could not load Supabase session:", error.message);
+    return null;
+  }
+}
+
+async function saveStoredSession(sessionId, session) {
+  if (!isSupabaseConfigured()) {
+    return;
+  }
+
+  try {
+    await supabaseRequest(
+      "POST",
+      "/google_oauth_sessions?on_conflict=session_id",
+      serializeStoredSession(sessionId, session),
+      {
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+    );
+  } catch (error) {
+    console.error("Could not save Supabase session:", error.message);
+  }
+}
+
+function isSupabaseConfigured() {
+  return Boolean(supabaseUrl && supabaseServiceRoleKey && tokenEncryptionSecret);
+}
+
+async function supabaseRequest(method, pathAndQuery, body, extraHeaders = {}) {
+  const base = supabaseUrl.replace(/\/+$/g, "");
+  const response = await fetch(`${base}/rest/v1${pathAndQuery}`, {
+    method,
+    headers: {
+      apikey: supabaseServiceRoleKey,
+      Authorization: `Bearer ${supabaseServiceRoleKey}`,
+      "Content-Type": "application/json",
+      ...extraHeaders,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Supabase request failed with ${response.status}`);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
+function serializeStoredSession(sessionId, session) {
+  return {
+    session_id: sessionId,
+    status: session.status || "idle",
+    provider: session.provider || "gmail",
+    detail: session.detail || "",
+    connected_at: session.connectedAt || null,
+    access_token: session.accessToken ? encryptText(session.accessToken) : null,
+    refresh_token: session.refreshToken ? encryptText(session.refreshToken) : null,
+    expires_in: Number(session.expiresIn || 0) || null,
+    expires_at: session.expiresAt ? new Date(Number(session.expiresAt)).toISOString() : null,
+    scopes,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeStoredSession(row) {
+  return {
+    status: row.status || "idle",
+    provider: row.provider || "gmail",
+    detail: row.detail || "",
+    connectedAt: row.connected_at || "",
+    accessToken: row.access_token ? decryptText(row.access_token) : "",
+    refreshToken: row.refresh_token ? decryptText(row.refresh_token) : "",
+    expiresIn: row.expires_in || 0,
+    expiresAt: row.expires_at ? new Date(row.expires_at).getTime() : 0,
+  };
+}
+
+function encryptText(value) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", getTokenEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(String(value), "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return [iv, tag, encrypted].map((part) => part.toString("base64url")).join(".");
+}
+
+function decryptText(value) {
+  const [ivText, tagText, encryptedText] = String(value).split(".");
+
+  if (!ivText || !tagText || !encryptedText) {
+    return "";
+  }
+
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    getTokenEncryptionKey(),
+    Buffer.from(ivText, "base64url"),
+  );
+  decipher.setAuthTag(Buffer.from(tagText, "base64url"));
+
+  return Buffer.concat([
+    decipher.update(Buffer.from(encryptedText, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+function getTokenEncryptionKey() {
+  return crypto.createHash("sha256").update(tokenEncryptionSecret).digest();
 }
 
 function createHttpError(statusCode, message) {
