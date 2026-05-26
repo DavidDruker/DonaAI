@@ -58,6 +58,32 @@ export async function createGoogleCalendarEvent(sessionId, event) {
   return payload;
 }
 
+export async function listGoogleCalendarEvents(sessionId, query) {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const response = await fetch(`${backendUrl}/api/calendar/events/list`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      sessionId,
+      query,
+      timezone,
+    }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    return {
+      status: "error",
+      detail: payload.detail || "Google Calendar could not read events.",
+    };
+  }
+
+  return payload;
+}
+
 export async function sendGmailMessage(sessionId, email) {
   const response = await fetch(`${backendUrl}/api/email/send`, {
     method: "POST",

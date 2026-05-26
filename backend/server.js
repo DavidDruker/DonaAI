@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const dns = require("node:dns").promises;
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -17,14 +18,18 @@ const geminiApiKey = cleanEnvValue(process.env.GEMINI_API_KEY);
 const geminiModel = cleanEnvValue(process.env.GEMINI_MODEL) || "gemini-2.5-flash";
 const scopes = [
   "openid",
-  "profile",
-  "email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+  "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.events.readonly",
+  "https://www.googleapis.com/auth/calendar.freebusy",
 ];
 
 const sessions = new Map();
+const maxJsonBodyBytes = 1024 * 1024;
 const researchKeywords = [
   "research",
   "look up",
@@ -46,6 +51,10 @@ function cleanEnvValue(value) {
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, baseUrl);
+
+    if (request.method === "OPTIONS") {
+      return sendEmpty(response, 204);
+    }
 
     if (request.method === "GET" && url.pathname === "/health") {
       return sendJson(response, 200, { ok: true });
@@ -79,6 +88,10 @@ const server = http.createServer(async (request, response) => {
       return createGoogleCalendarEvent(request, response);
     }
 
+    if (request.method === "POST" && url.pathname === "/api/calendar/events/list") {
+      return listGoogleCalendarEvents(request, response);
+    }
+
     if (request.method === "POST" && url.pathname === "/api/email/send") {
       return sendGmailMessage(request, response);
     }
@@ -86,6 +99,14 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 404, { error: "Not found" });
   } catch (error) {
     console.error(error);
+
+    if (error.statusCode) {
+      return sendJson(response, error.statusCode, {
+        status: "error",
+        detail: error.message,
+      });
+    }
+
     return sendHtml(
       response,
       500,
@@ -213,7 +234,7 @@ async function parseAssistantAction(request, response) {
             text: [
               "You are the intent and content planner for a personal secretary app.",
               "Identify what the user wants, then return the structured action the app should perform.",
-              "Supported actions: clarification_question, chat_response, create_reminder, create_alarm, create_calendar_event, send_email, unsupported.",
+              "Supported actions: clarification_question, chat_response, create_reminder, create_alarm, create_calendar_event, list_calendar_events, send_email, unsupported.",
               "",
               "General chat rules:",
               "- Return chat_response for general conversation, explanations, advice, brainstorming, and information requests that do not ask you to create an email, reminder, alarm, or calendar event.",
@@ -245,11 +266,17 @@ async function parseAssistantAction(request, response) {
               "",
               "Calendar rules:",
               "- Return create_calendar_event only when the user clearly asks to schedule, book, add, or create a meeting/event.",
+              "- Return list_calendar_events when the user asks what is on their calendar, what meetings/events they have, whether they are free or busy, or asks to review their schedule.",
+              "- For list_calendar_events, resolve the requested date range into start_at and end_at. If no date range is given, use today from 00:00 through 23:59 local time.",
+              "- For list_calendar_events, use a short title such as Calendar review.",
               "- If no duration is given, use 30 minutes.",
               "",
               "Email rules:",
               "- Return send_email only when the user clearly asks to send an email.",
               "- Require a recipient email address in the user request. If only a name is given, return unsupported and ask for the address in confirmation.",
+              "- Check that email_to looks like a valid email address before returning send_email. It must contain one @, a domain, and a top-level domain, with no spaces.",
+              "- If the provided email address looks invalid or incomplete, return clarification_question and ask the user for the correct email address.",
+              "- Do not claim the recipient mailbox exists. The app can validate email format and domain delivery only, not whether an individual inbox exists.",
               "- Always use a formal tone unless the user explicitly asks for a different tone.",
               "- Always address the recipient by first name unless the user explicitly says not to use a name.",
               "- If the recipient's first name is not clear from the request or email address, return clarification_question and ask for the recipient's first name before sending.",
@@ -303,6 +330,7 @@ async function parseAssistantAction(request, response) {
               "create_reminder",
               "create_alarm",
               "create_calendar_event",
+              "list_calendar_events",
               "send_email",
               "clarification_question",
               "chat_response",
@@ -560,7 +588,7 @@ async function sendGmailMessage(request, response) {
   const sessionId = String(body.sessionId || "");
   const session = sessionId ? sessions.get(sessionId) : null;
 
-  if (!session || session.status !== "connected" || !session.accessToken) {
+  if (!session || session.status !== "connected") {
     return sendJson(response, 401, {
       status: "not_connected",
       detail: "Connect Google first, then try sending the email again.",
@@ -576,10 +604,34 @@ async function sendGmailMessage(request, response) {
     });
   }
 
+  const domainCheck = await checkEmailDomain(email.email_to);
+
+  if (!domainCheck.valid) {
+    return sendJson(response, 400, {
+      status: "error",
+      detail: domainCheck.detail,
+    });
+  }
+
   if (!email.email_subject || !email.email_body) {
     return sendJson(response, 400, {
       status: "error",
       detail: "Email subject and body are required.",
+    });
+  }
+
+  const tokenResult = await getValidGoogleAccessToken(session);
+
+  if (!tokenResult.ok) {
+    sessions.set(sessionId, {
+      ...session,
+      status: "error",
+      detail: tokenResult.detail,
+    });
+
+    return sendJson(response, 401, {
+      status: "not_connected",
+      detail: tokenResult.detail,
     });
   }
 
@@ -594,7 +646,7 @@ async function sendGmailMessage(request, response) {
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.accessToken}`,
+        Authorization: `Bearer ${tokenResult.accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ raw }),
@@ -615,7 +667,9 @@ async function sendGmailMessage(request, response) {
   return sendJson(response, 200, {
     status: "sent",
     id: payload.id,
-    detail: email.confirmation || `Email sent to ${email.email_to}.`,
+    detail:
+      email.confirmation ||
+      `Gmail accepted the message for ${email.email_to}.`,
   });
 }
 
@@ -647,15 +701,71 @@ function isValidEmailAddress(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""));
 }
 
+async function checkEmailDomain(value) {
+  const domain = String(value || "").split("@").pop().toLowerCase();
+
+  if (!domain) {
+    return {
+      valid: false,
+      detail: "A valid recipient email domain is required.",
+    };
+  }
+
+  try {
+    const mxRecords = await dns.resolveMx(domain);
+
+    if (mxRecords.length > 0) {
+      return { valid: true };
+    }
+  } catch (error) {
+    // Some domains can still receive mail through A/AAAA fallback, checked below.
+  }
+
+  try {
+    const addresses = await dns.resolve(domain);
+
+    if (addresses.length > 0) {
+      return { valid: true };
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      detail:
+        "That email domain does not appear to receive mail. Please check the recipient address.",
+    };
+  }
+
+  return {
+    valid: false,
+    detail:
+      "That email domain does not appear to receive mail. Please check the recipient address.",
+  };
+}
+
 async function createGoogleCalendarEvent(request, response) {
   const body = await readJsonBody(request);
   const sessionId = String(body.sessionId || "");
   const session = sessionId ? sessions.get(sessionId) : null;
 
-  if (!session || session.status !== "connected" || !session.accessToken) {
+  if (!session || session.status !== "connected") {
     return sendJson(response, 401, {
       status: "not_connected",
       detail: "Connect Google first, then try creating the calendar event again.",
+    });
+  }
+
+  const tokenResult = await getValidGoogleAccessToken(session);
+
+  if (!tokenResult.ok) {
+    sessions.set(sessionId, {
+      ...session,
+      status: "error",
+      detail: tokenResult.detail,
+    });
+
+    return sendJson(response, 401, {
+      status: "not_connected",
+      detail: tokenResult.detail,
     });
   }
 
@@ -680,7 +790,7 @@ async function createGoogleCalendarEvent(request, response) {
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.accessToken}`,
+        Authorization: `Bearer ${tokenResult.accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -720,23 +830,222 @@ async function createGoogleCalendarEvent(request, response) {
   });
 }
 
+async function listGoogleCalendarEvents(request, response) {
+  const body = await readJsonBody(request);
+  const sessionId = String(body.sessionId || "");
+  const session = sessionId ? sessions.get(sessionId) : null;
+
+  if (!session || session.status !== "connected") {
+    return sendJson(response, 401, {
+      status: "not_connected",
+      detail: "Connect Google first, then try reviewing your calendar again.",
+    });
+  }
+
+  const tokenResult = await getValidGoogleAccessToken(session);
+
+  if (!tokenResult.ok) {
+    sessions.set(sessionId, {
+      ...session,
+      status: "error",
+      detail: tokenResult.detail,
+    });
+
+    return sendJson(response, 401, {
+      status: "not_connected",
+      detail: tokenResult.detail,
+    });
+  }
+
+  const query = body.query || {};
+  const timezone = String(body.timezone || "America/Toronto");
+  const range = getCalendarQueryRange(query, timezone);
+
+  if (!range.valid) {
+    return sendJson(response, 400, {
+      status: "error",
+      detail: range.detail,
+    });
+  }
+
+  const params = new URLSearchParams({
+    timeMin: range.startAt.toISOString(),
+    timeMax: range.endAt.toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "20",
+  });
+
+  const calendarResponse = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${tokenResult.accessToken}`,
+      },
+    },
+  );
+  const payload = await calendarResponse.json();
+
+  if (!calendarResponse.ok) {
+    return sendJson(response, calendarResponse.status, {
+      status: "error",
+      detail:
+        payload.error?.message ||
+        "Google Calendar could not read events. Reconnect Google if calendar permission was just added.",
+    });
+  }
+
+  const events = (payload.items || []).map((event) => normalizeCalendarEvent(event, timezone));
+
+  return sendJson(response, 200, {
+    status: "ok",
+    events,
+    detail: formatCalendarEventsDetail(events, range, timezone),
+  });
+}
+
+function getCalendarQueryRange(query, timezone) {
+  const startAt = query.start_at ? new Date(query.start_at) : startOfToday();
+  const endAt = query.end_at ? new Date(query.end_at) : endOfToday();
+
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+    return {
+      valid: false,
+      detail: "The calendar date range could not be understood.",
+    };
+  }
+
+  if (endAt <= startAt) {
+    return {
+      valid: false,
+      detail: "The calendar end time must be after the start time.",
+    };
+  }
+
+  return {
+    valid: true,
+    startAt,
+    endAt,
+    timezone,
+  };
+}
+
+function startOfToday() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function endOfToday() {
+  const date = new Date();
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function normalizeCalendarEvent(event, timezone) {
+  const startValue = event.start?.dateTime || event.start?.date || "";
+  const endValue = event.end?.dateTime || event.end?.date || "";
+
+  return {
+    id: event.id || "",
+    title: event.summary || "Untitled event",
+    start: startValue,
+    end: endValue,
+    location: event.location || "",
+    description: event.description || "",
+    htmlLink: event.htmlLink || "",
+    allDay: Boolean(event.start?.date),
+    startLabel: formatCalendarDateTime(startValue, timezone, Boolean(event.start?.date)),
+    endLabel: formatCalendarDateTime(endValue, timezone, Boolean(event.end?.date)),
+  };
+}
+
+function formatCalendarEventsDetail(events, range, timezone) {
+  const dateLabel = new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeZone: timezone,
+  }).format(range.startAt);
+
+  if (events.length === 0) {
+    return `You do not have any calendar events for ${dateLabel}.`;
+  }
+
+  const lines = events.map((event, index) => {
+    const location = event.location ? ` at ${event.location}` : "";
+    const time = event.allDay
+      ? "All day"
+      : `${event.startLabel}${event.endLabel ? ` - ${event.endLabel}` : ""}`;
+
+    return `${index + 1}. ${time}: ${event.title}${location}`;
+  });
+
+  return [`Here is your calendar for ${dateLabel}:`, ...lines].join("\n");
+}
+
+function formatCalendarDateTime(value, timezone, allDay) {
+  if (!value) {
+    return "";
+  }
+
+  if (allDay) {
+    const date = new Date(`${value}T00:00:00`);
+    return new Intl.DateTimeFormat("en", {
+      dateStyle: "medium",
+      timeZone: timezone,
+    }).format(date);
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  }).format(date);
+}
+
 function readJsonBody(request) {
   return new Promise((resolve, reject) => {
     let data = "";
+    let byteLength = 0;
+    let tooLarge = false;
 
     request.on("data", (chunk) => {
+      byteLength += chunk.length;
+
+      if (byteLength > maxJsonBodyBytes) {
+        tooLarge = true;
+        request.destroy();
+        return;
+      }
+
       data += chunk;
     });
 
     request.on("end", () => {
+      if (tooLarge) {
+        reject(createHttpError(413, "Request body is too large."));
+        return;
+      }
+
       try {
         resolve(data ? JSON.parse(data) : {});
       } catch (error) {
-        reject(error);
+        reject(createHttpError(400, "Request body must be valid JSON."));
       }
     });
 
-    request.on("error", reject);
+    request.on("error", () => {
+      reject(
+        tooLarge
+          ? createHttpError(413, "Request body is too large.")
+          : createHttpError(400, "Request body could not be read."),
+      );
+    });
   });
 }
 
@@ -772,6 +1081,12 @@ async function completeGoogleAuth(url, response) {
 
   if (!sessionId) {
     return sendHtml(response, 400, page("Missing session", "No session was provided."));
+  }
+
+  const session = sessions.get(sessionId);
+
+  if (!session || session.status !== "pending") {
+    return sendHtml(response, 400, page("Invalid session", "This Gmail sign-in session is no longer valid."));
   }
 
   if (error || !code) {
@@ -826,6 +1141,7 @@ async function completeGoogleAuth(url, response) {
     accessToken: tokenPayload.access_token,
     refreshToken: tokenPayload.refresh_token || "",
     expiresIn: tokenPayload.expires_in,
+    expiresAt: Date.now() + Number(tokenPayload.expires_in || 0) * 1000,
   });
 
   return sendHtml(
@@ -858,8 +1174,84 @@ function sendEmailStatus(url, response) {
   });
 }
 
+async function getValidGoogleAccessToken(session) {
+  if (!session.accessToken) {
+    return {
+      ok: false,
+      detail: "Google is not connected. Reconnect Google and try again.",
+    };
+  }
+
+  const expiresAt = Number(session.expiresAt || 0);
+  const refreshWindowMilliseconds = 60 * 1000;
+
+  if (!expiresAt || expiresAt - Date.now() > refreshWindowMilliseconds) {
+    return {
+      ok: true,
+      accessToken: session.accessToken,
+    };
+  }
+
+  if (!session.refreshToken) {
+    return {
+      ok: false,
+      detail: "Google access expired. Reconnect Google and try again.",
+    };
+  }
+
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      client_id: googleClientId,
+      client_secret: googleClientSecret,
+      refresh_token: session.refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  const tokenPayload = await tokenResponse.json();
+
+  if (!tokenResponse.ok) {
+    return {
+      ok: false,
+      detail:
+        tokenPayload.error_description ||
+        tokenPayload.error ||
+        "Google access expired. Reconnect Google and try again.",
+    };
+  }
+
+  session.accessToken = tokenPayload.access_token;
+  session.expiresIn = tokenPayload.expires_in;
+  session.expiresAt = Date.now() + Number(tokenPayload.expires_in || 0) * 1000;
+
+  return {
+    ok: true,
+    accessToken: session.accessToken,
+  };
+}
+
+function createHttpError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function sendEmpty(response, statusCode) {
+  response.writeHead(statusCode, {
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Origin": "*",
+  });
+  response.end();
+}
+
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Origin": "*",
     "Content-Type": "application/json",
   });

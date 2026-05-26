@@ -79,7 +79,7 @@ Start the backend:
 npm run backend
 ```
 
-`npm start` runs the backend for hosted deployments. Use `npx expo start` or `npm run expo` for the mobile development server.
+`npm start` runs the backend for hosted deployments. Use `npx expo start` or `npm run expo:start` for the mobile development server.
 
 Then start Expo:
 
@@ -109,6 +109,8 @@ Example prompts:
 - `Set a reminder tonight at 8 to take out the trash`
 - `Schedule coffee with Maya tomorrow at 2pm`
 - `Add a calendar event Friday at 10am for budget review`
+- `What meetings do I have today?`
+- `Review my calendar for tomorrow`
 - `Send an email to alex@example.com saying I will be 10 minutes late`
 - `Email maya@example.com with subject Budget review and tell her I moved it to Friday`
 

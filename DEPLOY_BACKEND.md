@@ -67,4 +67,6 @@ npx expo start --clear --go --lan -p 8081
 
 ## Current Limitation
 
-The backend currently stores Google OAuth sessions in memory. That is acceptable for development, but a production version should add a database and encrypted token storage.
+The backend currently stores Google OAuth sessions in memory. It now refreshes Google access tokens while the Render process is alive, but Render restarts, redeploys, and free-service sleeps still clear connected sessions.
+
+A production version should add a database and encrypted token storage so users stay connected across Render restarts.

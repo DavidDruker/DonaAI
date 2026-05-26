@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -23,7 +24,6 @@ import {
 } from "./services/deviceAccess";
 import {
   getEmailAccessSummary,
-  getEmailRuntimeInfo,
   getEmailProviders,
   getGoogleSessionId,
   refreshEmailConnection,
@@ -31,6 +31,7 @@ import {
 } from "./services/emailAccess";
 import {
   createGoogleCalendarEvent,
+  listGoogleCalendarEvents,
   parseAssistantPrompt,
   sendGmailMessage,
 } from "./services/assistantApi";
@@ -61,10 +62,10 @@ export default function SecretaryApp() {
   const [connections, setConnections] = useState(initialConnections);
   const [prompt, setPrompt] = useState("");
   const [emailConnection, setEmailConnection] = useState(null);
-  const emailRuntime = getEmailRuntimeInfo();
   const [messages, setMessages] = useState(initialMessages);
   const [loadingKey, setLoadingKey] = useState("");
   const [clarificationContext, setClarificationContext] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const scrollViewRef = useRef(null);
 
   useEffect(() => {
@@ -73,6 +74,7 @@ export default function SecretaryApp() {
 
   async function refreshDeviceAccess() {
     setLoadingKey("refresh");
+    const wasEmailConnected = connections.email.status === "authorized";
     const [calendar, reminders, email] = await Promise.all([
       loadCalendarSummary(),
       loadReminderSummary(),
@@ -81,11 +83,16 @@ export default function SecretaryApp() {
 
     if (email.status === "connected") {
       setEmailConnection(email);
-      appendAssistantMessage("Gmail is connected.");
+
+      if (!wasEmailConnected) {
+        appendAssistantMessage("Gmail is connected.");
+      }
+    } else {
+      setEmailConnection(null);
     }
 
     setConnections({
-      email: getEmailAccessSummary(email.status === "connected" ? email : emailConnection || email),
+      email: getEmailAccessSummary(email),
       calendar,
       reminders,
     });
@@ -229,6 +236,14 @@ export default function SecretaryApp() {
         return;
       }
 
+      if (intent.action === "list_calendar_events") {
+        const result = await listGoogleCalendarEvents(getGoogleSessionId(), intent);
+        appendAssistantMessage(result.detail);
+        setClarificationContext(null);
+        setPrompt("");
+        return;
+      }
+
       if (intent.action === "send_email") {
         const result = await sendGmailMessage(getGoogleSessionId(), intent);
         appendAssistantMessage(result.detail);
@@ -272,43 +287,40 @@ export default function SecretaryApp() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.keyboardView}
       >
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-        >
+        <View style={styles.container}>
           <View style={styles.header}>
             <View>
               <Text style={styles.kicker}>Secretary</Text>
-              <Text style={styles.title}>Connect your day.</Text>
+              <Text style={styles.title}>Dona</Text>
             </View>
             <Pressable
               accessibilityRole="button"
-              onPress={refreshDeviceAccess}
-              style={({ pressed }) => [
-                styles.refreshButton,
-                pressed && styles.pressedButton,
-              ]}
+              accessibilityLabel="Open settings"
+              onPress={() => setSettingsOpen((current) => !current)}
+              style={({ pressed }) => [styles.menuButton, pressed && styles.pressedButton]}
             >
-              {loadingKey === "refresh" ? (
-                <ActivityIndicator color="#f8fafc" size="small" />
-              ) : (
-                <Text style={styles.refreshText}>Refresh</Text>
-              )}
+              <MenuIcon />
             </Pressable>
           </View>
 
-          <View style={styles.chatPanel}>
-            {messages.map((message) => (
-              <ChatBubble key={message.id} message={message} />
-            ))}
-            {loadingKey === "assistant" ? (
-              <View style={[styles.bubble, styles.assistantBubble]}>
-                <ActivityIndicator color="#8ea4ff" size="small" />
-              </View>
-            ) : null}
-          </View>
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={styles.chatScrollContent}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            style={styles.chatScroll}
+          >
+            <View style={styles.chatPanel}>
+              {messages.map((message) => (
+                <ChatBubble key={message.id} message={message} />
+              ))}
+              {loadingKey === "assistant" ? (
+                <View style={[styles.bubble, styles.assistantBubble]}>
+                  <ActivityIndicator color="#8ea4ff" size="small" />
+                </View>
+              ) : null}
+            </View>
+          </ScrollView>
 
           <View style={styles.promptPanel}>
             <TextInput
@@ -336,21 +348,44 @@ export default function SecretaryApp() {
               )}
             </Pressable>
           </View>
+        </View>
+      </KeyboardAvoidingView>
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setSettingsOpen(false)}
+        transparent
+        visible={settingsOpen}
+      >
+        <View style={styles.drawerOverlay}>
+          <Pressable
+            accessibilityLabel="Close settings"
+            style={styles.drawerScrim}
+            onPress={() => setSettingsOpen(false)}
+          />
+          <View style={styles.drawer}>
+            <View style={styles.drawerHeader}>
+              <Text style={styles.drawerTitle}>Connect</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setSettingsOpen(false)}
+                style={({ pressed }) => [
+                  styles.closeButton,
+                  pressed && styles.pressedButton,
+                ]}
+              >
+                <Text style={styles.closeText}>×</Text>
+              </Pressable>
+            </View>
 
-          <View style={styles.connectionList}>
-            <ConnectionCard
-              actionLabel="Connect"
+            <ConnectionRow
               detail={connections.email.detail}
               emailProviders={getEmailProviders()}
-              footer={
-                `Backend: ${emailRuntime.backendUrl}. Google redirect: ${emailRuntime.redirectUri}`
-              }
               loadingKey={loadingKey}
               onEmailPress={connectEmail}
               status={connections.email.status}
               title="Email"
             />
-            <ConnectionCard
+            <ConnectionRow
               actionLabel="Allow"
               detail={connections.calendar.detail}
               loading={loadingKey === "calendar"}
@@ -358,7 +393,7 @@ export default function SecretaryApp() {
               status={connections.calendar.status}
               title="Calendar"
             />
-            <ConnectionCard
+            <ConnectionRow
               actionLabel="Allow"
               detail={connections.reminders.detail}
               loading={loadingKey === "reminders"}
@@ -366,18 +401,32 @@ export default function SecretaryApp() {
               status={connections.reminders.status}
               title="Reminders"
             />
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={refreshDeviceAccess}
+              style={({ pressed }) => [
+                styles.drawerRefresh,
+                pressed && styles.pressedButton,
+              ]}
+            >
+              {loadingKey === "refresh" ? (
+                <ActivityIndicator color="#f8fafc" size="small" />
+              ) : (
+                <Text style={styles.drawerRefreshText}>Refresh status</Text>
+              )}
+            </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-function ConnectionCard({
-  actionLabel,
+function ConnectionRow({
+  actionLabel = "Connect",
   detail,
   emailProviders,
-  footer,
   loading,
   loadingKey,
   onEmailPress,
@@ -389,26 +438,28 @@ function ConnectionCard({
   const blocked = status === "unsupported";
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardTop}>
-        <View>
-          <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.cardDetail}>{detail}</Text>
+    <View style={styles.connectionRow}>
+      <View style={styles.connectionRowTop}>
+        <View style={[styles.statusDot, connected && styles.statusDotGood]} />
+        <View style={styles.connectionTextWrap}>
+          <Text style={styles.connectionTitle}>{title}</Text>
+          <Text style={styles.connectionDetail}>{detail}</Text>
         </View>
-        <StatusBadge status={status} />
+        <Text style={[styles.connectionState, connected && styles.connectionStateGood]}>
+          {connected ? "Connected" : blocked ? "Unavailable" : "Not connected"}
+        </Text>
       </View>
 
       {emailProviders && !connected ? (
-        <View style={styles.emailButtonRow}>
+        <View style={styles.drawerActionRow}>
           {emailProviders.map((provider) => (
             <Pressable
               accessibilityRole="button"
               key={provider.key}
               onPress={() => onEmailPress(provider.key)}
               style={({ pressed }) => [
-                styles.cardButton,
-                styles.emailButton,
-                !provider.configured && styles.secondaryButton,
+                styles.drawerActionButton,
+                !provider.configured && styles.drawerSecondaryButton,
                 pressed && styles.pressedButton,
               ]}
             >
@@ -417,8 +468,8 @@ function ConnectionCard({
               ) : (
                 <Text
                   style={[
-                    styles.cardButtonText,
-                    !provider.configured && styles.secondaryButtonText,
+                    styles.drawerActionText,
+                    !provider.configured && styles.drawerSecondaryText,
                   ]}
                 >
                   {provider.name}
@@ -429,21 +480,19 @@ function ConnectionCard({
         </View>
       ) : null}
 
-      {footer ? <Text style={styles.cardFooter}>{footer}</Text> : null}
-
       {!emailProviders && !connected && !blocked ? (
         <Pressable
           accessibilityRole="button"
           onPress={onPress}
           style={({ pressed }) => [
-            styles.cardButton,
+            styles.drawerActionButton,
             pressed && styles.pressedButton,
           ]}
         >
           {loading ? (
             <ActivityIndicator color="#081018" size="small" />
           ) : (
-            <Text style={styles.cardButtonText}>{actionLabel}</Text>
+            <Text style={styles.drawerActionText}>{actionLabel}</Text>
           )}
         </Pressable>
       ) : null}
@@ -468,39 +517,14 @@ function ChatBubble({ message }) {
   );
 }
 
-function StatusBadge({ status }) {
-  const label = getStatusLabel(status);
-  const tone = status === "granted" ? styles.badgeGood : styles.badgeNeutral;
-
+function MenuIcon() {
   return (
-    <View style={[styles.badge, tone]}>
-      <Text style={styles.badgeText}>{label}</Text>
+    <View style={styles.menuIcon}>
+      <View style={styles.menuLine} />
+      <View style={styles.menuLine} />
+      <View style={styles.menuLine} />
     </View>
   );
-}
-
-function getStatusLabel(status) {
-  if (status === "granted") {
-    return "Connected";
-  }
-
-  if (status === "authorized") {
-    return "Authorized";
-  }
-
-  if (status === "unsupported") {
-    return "Unavailable";
-  }
-
-  if (status === "needs_oauth") {
-    return "Connect";
-  }
-
-  if (status === "checking") {
-    return "Checking";
-  }
-
-  return "Not connected";
 }
 
 const styles = StyleSheet.create({
@@ -512,14 +536,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
+    flex: 1,
     padding: 20,
-    paddingBottom: 36,
+    paddingBottom: 16,
   },
   header: {
-    alignItems: "flex-start",
+    alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 24,
+    marginBottom: 18,
   },
   kicker: {
     color: "#8ea4ff",
@@ -530,10 +555,30 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#f8fafc",
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: "900",
     letterSpacing: 0,
     marginTop: 4,
+  },
+  menuButton: {
+    alignItems: "center",
+    backgroundColor: "#101a29",
+    borderColor: "#26364f",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 46,
+  },
+  menuIcon: {
+    gap: 5,
+    width: 18,
+  },
+  menuLine: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 2,
+    height: 2,
+    width: 18,
   },
   refreshButton: {
     alignItems: "center",
@@ -559,7 +604,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
-    marginTop: 12,
     padding: 10,
   },
   input: {
@@ -569,7 +613,8 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     minHeight: 42,
     paddingHorizontal: 4,
-    textAlignVertical: "center",
+    paddingVertical: 8,
+    textAlignVertical: "top",
   },
   sendButton: {
     alignItems: "center",
@@ -585,7 +630,12 @@ const styles = StyleSheet.create({
   },
   chatPanel: {
     gap: 10,
-    minHeight: 260,
+  },
+  chatScroll: {
+    flex: 1,
+  },
+  chatScrollContent: {
+    paddingBottom: 14,
   },
   bubble: {
     borderRadius: 8,
@@ -614,83 +664,133 @@ const styles = StyleSheet.create({
   },
   connectionList: {
     gap: 12,
-    marginTop: 22,
+    marginTop: 12,
   },
-  card: {
+  drawerOverlay: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  drawerScrim: {
+    backgroundColor: "rgba(0, 0, 0, 0.52)",
+    flex: 1,
+  },
+  drawer: {
+    backgroundColor: "#081018",
+    borderLeftColor: "#26364f",
+    borderLeftWidth: 1,
+    gap: 12,
+    padding: 18,
+    paddingTop: 54,
+    width: 320,
+  },
+  drawerHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  drawerTitle: {
+    color: "#f8fafc",
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  closeButton: {
+    alignItems: "center",
     backgroundColor: "#101a29",
     borderColor: "#26364f",
     borderRadius: 8,
     borderWidth: 1,
-    padding: 14,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
   },
-  cardTop: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "space-between",
-  },
-  cardTitle: {
+  closeText: {
     color: "#f8fafc",
-    fontSize: 17,
+    fontSize: 24,
+    lineHeight: 26,
+  },
+  connectionRow: {
+    backgroundColor: "#101a29",
+    borderColor: "#26364f",
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+  },
+  connectionRowTop: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  statusDot: {
+    backgroundColor: "#7f8ba0",
+    borderRadius: 5,
+    height: 10,
+    width: 10,
+  },
+  statusDotGood: {
+    backgroundColor: "#4ade80",
+  },
+  connectionTextWrap: {
+    flex: 1,
+  },
+  connectionTitle: {
+    color: "#f8fafc",
+    fontSize: 15,
     fontWeight: "900",
   },
-  cardDetail: {
+  connectionDetail: {
     color: "#aeb8c8",
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 5,
-    maxWidth: 230,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
   },
-  badge: {
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  badgeGood: {
-    backgroundColor: "rgba(74, 222, 128, 0.18)",
-  },
-  badgeNeutral: {
-    backgroundColor: "rgba(142, 164, 255, 0.16)",
-  },
-  badgeText: {
-    color: "#f8fafc",
+  connectionState: {
+    color: "#aeb8c8",
     fontSize: 11,
     fontWeight: "900",
   },
-  cardButton: {
+  connectionStateGood: {
+    color: "#4ade80",
+  },
+  drawerActionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  drawerActionButton: {
     alignItems: "center",
     backgroundColor: "#f8fafc",
     borderRadius: 8,
-    justifyContent: "center",
-    marginTop: 14,
-    minHeight: 42,
-  },
-  emailButtonRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
-  },
-  emailButton: {
     flex: 1,
-    marginTop: 0,
+    justifyContent: "center",
+    minHeight: 38,
+    paddingHorizontal: 10,
   },
-  secondaryButton: {
+  drawerSecondaryButton: {
     backgroundColor: "#152133",
     borderColor: "#34445f",
     borderWidth: 1,
   },
-  secondaryButtonText: {
+  drawerSecondaryText: {
     color: "#f8fafc",
   },
-  cardButtonText: {
+  drawerActionText: {
     color: "#081018",
     fontWeight: "900",
   },
-  cardFooter: {
-    color: "#7f8ba0",
-    fontSize: 12,
-    lineHeight: 18,
+  drawerRefresh: {
+    alignItems: "center",
+    backgroundColor: "#152133",
+    borderColor: "#26364f",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
     marginTop: 12,
+    minHeight: 40,
+  },
+  drawerRefreshText: {
+    color: "#f8fafc",
+    fontWeight: "900",
   },
   pressedButton: {
     opacity: 0.78,
