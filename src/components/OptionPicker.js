@@ -21,7 +21,7 @@ export default function OptionPicker({ label, onChange, options, value }) {
           <Text style={styles.dropdownText}>
             {selectedOption?.label || "Select"}
           </Text>
-          <Text style={styles.dropdownChevron}>{open ? "Up" : "Down"}</Text>
+          <Text style={styles.dropdownChevron}>{open ? "▲" : "▼"}</Text>
         </Pressable>
         {open ? (
           <View style={styles.dropdownMenu}>

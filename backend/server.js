@@ -1358,11 +1358,7 @@ async function getStoredSession(sessionId) {
   }
 
   try {
-    const rows = await supabaseRequest(
-      "GET",
-      `/google_oauth_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=*`,
-    );
-    const row = Array.isArray(rows) ? rows[0] : null;
+    const row = await findStoredSessionRow(sessionId);
 
     if (!row) {
       return null;
@@ -1373,6 +1369,31 @@ async function getStoredSession(sessionId) {
     console.error("Could not load Supabase session:", error.message);
     return null;
   }
+}
+
+async function findStoredSessionRow(sessionId) {
+  const rows = await supabaseRequest(
+    "GET",
+    `/google_oauth_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=*`,
+  );
+  const row = Array.isArray(rows) ? rows[0] : null;
+
+  if (row) {
+    return row;
+  }
+
+  const userId = getUserIdFromSessionId(sessionId);
+
+  if (!userId) {
+    return null;
+  }
+
+  const userRows = await supabaseRequest(
+    "GET",
+    `/google_oauth_sessions?user_id=eq.${encodeURIComponent(userId)}&select=*&order=updated_at.desc&limit=1`,
+  );
+
+  return Array.isArray(userRows) ? userRows[0] || null : null;
 }
 
 async function saveStoredSession(sessionId, session) {
