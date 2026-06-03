@@ -195,6 +195,7 @@ async function parseAssistantAction(request, response) {
             body.preferences.defaultMeetingMinutes || "",
           ).trim(),
           emailSignoff: String(body.preferences.emailSignoff || "").trim(),
+          emailDraftMode: String(body.preferences.emailDraftMode || "").trim(),
           additionalInstructions: String(
             body.preferences.additionalInstructions || "",
           ).trim(),
@@ -302,8 +303,14 @@ async function parseAssistantAction(request, response) {
               "",
               "Calendar rules:",
               "- Return create_calendar_event only when the user clearly asks to schedule, book, add, or create a meeting/event.",
-              "- Return list_calendar_events when the user asks what is on their calendar, what meetings/events they have, whether they are free or busy, or asks to review their schedule.",
+              "- Return list_calendar_events when the user asks what is on their calendar, what meetings/events they have, whether they are free or busy, or asks to review, summarize, recap, audit, or list their schedule.",
               "- For list_calendar_events, resolve the requested date range into start_at and end_at. If no date range is given, use today from 00:00 through 23:59 local time.",
+              "- For daily summaries, use the requested day from 00:00 through 23:59 local time.",
+              "- For weekly summaries, use the full requested week from Monday 00:00 through Sunday 23:59 local time unless the user gives different boundaries.",
+              "- For monthly summaries, use the full requested month from day 1 at 00:00 through the last day at 23:59 local time.",
+              "- If the user asks for a named month such as May, use that whole month in the current year unless the user gives a different year.",
+              "- For list_calendar_events, preserve the actual date range. Never collapse every event to the first day of the range.",
+              "- If the user asks for dates, include dates by choosing a multi-day date range rather than answering from memory.",
               "- For list_calendar_events, use a short title such as Calendar review.",
               "- If no duration is given, use 30 minutes.",
               "",
@@ -639,6 +646,16 @@ function formatUserPreferences(preferences) {
     lines.push(`Email sign-off:\n${preferences.emailSignoff}`);
   }
 
+  if (preferences.emailDraftMode) {
+    lines.push(
+      `Email sending preference: ${
+        preferences.emailDraftMode === "send_immediately"
+          ? "send directly without showing a draft"
+          : "show a draft before sending"
+      }`,
+    );
+  }
+
   if (preferences.additionalInstructions) {
     lines.push(`Additional instructions: ${preferences.additionalInstructions}`);
   }
@@ -947,7 +964,7 @@ async function listGoogleCalendarEvents(request, response) {
     timeMax: range.endAt.toISOString(),
     singleEvents: "true",
     orderBy: "startTime",
-    maxResults: "20",
+    maxResults: "100",
   });
 
   const calendarResponse = await fetch(
@@ -1035,25 +1052,198 @@ function normalizeCalendarEvent(event, timezone) {
 }
 
 function formatCalendarEventsDetail(events, range, timezone) {
-  const dateLabel = new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeZone: timezone,
-  }).format(range.startAt);
+  const rangeLabel = formatCalendarRangeLabel(range, timezone);
 
   if (events.length === 0) {
-    return `You do not have any calendar events for ${dateLabel}.`;
+    return `You do not have any calendar events for ${rangeLabel}.`;
   }
 
+  const multiDay = isMultiDayCalendarRange(range, timezone);
+  const summaryLines = formatCalendarSummaryLines(events, range, timezone, multiDay);
   const lines = events.map((event, index) => {
     const location = event.location ? ` at ${event.location}` : "";
-    const time = event.allDay
-      ? "All day"
-      : `${event.startLabel}${event.endLabel ? ` - ${event.endLabel}` : ""}`;
+    const when = formatCalendarEventWhen(event, timezone, multiDay);
 
-    return `${index + 1}. ${time}: ${event.title}${location}`;
+    return `${index + 1}. ${when}: ${event.title}${location}`;
   });
 
-  return [`Here is your calendar for ${dateLabel}:`, ...lines].join("\n");
+  return [
+    `Here is your calendar for ${rangeLabel}:`,
+    ...summaryLines,
+    "",
+    "Agenda:",
+    ...lines,
+  ].join("\n");
+}
+
+function formatCalendarSummaryLines(events, range, timezone, multiDay) {
+  const lines = [`Summary: ${events.length} event${events.length === 1 ? "" : "s"}.`];
+  const timedEvents = events.filter((event) => !event.allDay);
+  const conflicts = findCalendarConflicts(timedEvents);
+
+  if (multiDay) {
+    const eventsByDay = groupEventsByDay(events, timezone);
+    const busiestDay = getBusiestCalendarDay(eventsByDay);
+
+    if (busiestDay) {
+      lines.push(`Busiest day: ${busiestDay.label} with ${busiestDay.count} event${busiestDay.count === 1 ? "" : "s"}.`);
+    }
+
+    const freeDays = getFreeCalendarDays(eventsByDay, range, timezone);
+
+    if (freeDays.length > 0 && freeDays.length <= 7) {
+      lines.push(`No events listed on: ${freeDays.join(", ")}.`);
+    } else if (freeDays.length > 7) {
+      lines.push(`${freeDays.length} days have no events listed.`);
+    }
+  }
+
+  if (conflicts.length > 0) {
+    lines.push(`Possible conflicts: ${conflicts.slice(0, 3).join("; ")}.`);
+  }
+
+  return lines;
+}
+
+function groupEventsByDay(events, timezone) {
+  const groups = new Map();
+
+  events.forEach((event) => {
+    const key = getCalendarDayKey(event.start, timezone, event.allDay);
+
+    if (!key) {
+      return;
+    }
+
+    const current = groups.get(key) || {
+      count: 0,
+      label: formatCalendarDateOnly(event.start, timezone, event.allDay),
+    };
+
+    current.count += 1;
+    groups.set(key, current);
+  });
+
+  return groups;
+}
+
+function getBusiestCalendarDay(eventsByDay) {
+  return Array.from(eventsByDay.values()).sort((left, right) => right.count - left.count)[0] || null;
+}
+
+function getFreeCalendarDays(eventsByDay, range, timezone) {
+  const days = [];
+  const cursor = new Date(range.startAt);
+  cursor.setHours(0, 0, 0, 0);
+  const end = new Date(range.endAt);
+  end.setHours(0, 0, 0, 0);
+
+  while (cursor <= end && days.length < 32) {
+    const key = getCalendarDayKey(cursor.toISOString(), timezone, false);
+
+    if (key && !eventsByDay.has(key)) {
+      days.push(formatCalendarDateOnly(cursor.toISOString(), timezone, false));
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return days;
+}
+
+function findCalendarConflicts(events) {
+  const sortedEvents = events
+    .map((event) => ({
+      ...event,
+      startMs: Date.parse(event.start),
+      endMs: Date.parse(event.end),
+    }))
+    .filter((event) => !Number.isNaN(event.startMs) && !Number.isNaN(event.endMs))
+    .sort((left, right) => left.startMs - right.startMs);
+  const conflicts = [];
+
+  for (let index = 1; index < sortedEvents.length; index += 1) {
+    const previous = sortedEvents[index - 1];
+    const current = sortedEvents[index];
+
+    if (current.startMs < previous.endMs) {
+      conflicts.push(`${current.title} overlaps with ${previous.title}`);
+    }
+  }
+
+  return conflicts;
+}
+
+function getCalendarDayKey(value, timezone, allDay) {
+  if (!value) {
+    return "";
+  }
+
+  const date = allDay ? new Date(`${value}T00:00:00`) : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: timezone,
+    year: "numeric",
+  }).format(date);
+}
+
+function formatCalendarRangeLabel(range, timezone) {
+  const formatter = new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeZone: timezone,
+  });
+  const startLabel = formatter.format(range.startAt);
+  const endLabel = formatter.format(range.endAt);
+
+  return startLabel === endLabel ? startLabel : `${startLabel} through ${endLabel}`;
+}
+
+function isMultiDayCalendarRange(range, timezone) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: timezone,
+    year: "numeric",
+  });
+
+  return formatter.format(range.startAt) !== formatter.format(range.endAt);
+}
+
+function formatCalendarEventWhen(event, timezone, includeDate) {
+  const dateLabel = includeDate
+    ? formatCalendarDateOnly(event.start, timezone, event.allDay)
+    : "";
+
+  if (event.allDay) {
+    return dateLabel ? `${dateLabel}, all day` : "All day";
+  }
+
+  const timeLabel = `${event.startLabel}${event.endLabel ? ` - ${event.endLabel}` : ""}`;
+
+  return dateLabel ? `${dateLabel}, ${timeLabel}` : timeLabel;
+}
+
+function formatCalendarDateOnly(value, timezone, allDay) {
+  if (!value) {
+    return "";
+  }
+
+  const date = allDay ? new Date(`${value}T00:00:00`) : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeZone: timezone,
+  }).format(date);
 }
 
 function formatCalendarDateTime(value, timezone, allDay) {

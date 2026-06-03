@@ -132,6 +132,7 @@ export async function saveUserPreferences(userId, preferences) {
       email_length: preferences.emailLength,
       default_meeting_minutes: Number(preferences.defaultMeetingMinutes) || 30,
       email_signoff: preferences.emailSignoff,
+      email_draft_mode: preferences.emailDraftMode || "preview",
       additional_instructions: preferences.additionalInstructions,
       updated_at: new Date().toISOString(),
     },
@@ -171,6 +172,7 @@ function mapPreferenceRow(row) {
     emailLength: row.email_length || "Medium",
     defaultMeetingMinutes: String(row.default_meeting_minutes || 30),
     emailSignoff: row.email_signoff || "",
+    emailDraftMode: row.email_draft_mode || "preview",
     additionalInstructions: row.additional_instructions || "",
   };
 }

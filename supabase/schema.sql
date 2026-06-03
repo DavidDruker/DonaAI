@@ -83,6 +83,7 @@ create table if not exists public.user_preferences (
   email_length text not null default 'Medium',
   default_meeting_minutes integer not null default 30,
   email_signoff text not null default '',
+  email_draft_mode text not null default 'preview',
   additional_instructions text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -96,6 +97,9 @@ add column if not exists email_length text not null default 'Medium';
 
 alter table public.user_preferences
 add column if not exists additional_instructions text not null default '';
+
+alter table public.user_preferences
+add column if not exists email_draft_mode text not null default 'preview';
 
 alter table public.user_preferences enable row level security;
 

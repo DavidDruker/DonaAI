@@ -39,6 +39,11 @@ const emailLengthOptions = [
   { label: "Detailed", value: "Detailed" },
 ];
 
+const emailDraftOptions = [
+  { label: "Show draft", value: "preview" },
+  { label: "Send directly", value: "send_immediately" },
+];
+
 const durationOptions = [
   { label: "15 min", value: "15" },
   { label: "30 min", value: "30" },
@@ -113,6 +118,12 @@ export default function ConfigurationScreen({
             onChange={(value) => onChange("emailSignoff", value)}
             options={signoffOptions}
             value={preferences.emailSignoff}
+          />
+          <OptionPicker
+            label="Before sending email"
+            onChange={(value) => onChange("emailDraftMode", value)}
+            options={emailDraftOptions}
+            value={preferences.emailDraftMode}
           />
         </>
       ),

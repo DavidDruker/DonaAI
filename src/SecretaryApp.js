@@ -83,6 +83,7 @@ const defaultPreferences = {
   emailLength: "Medium",
   defaultMeetingMinutes: "30",
   emailSignoff: "Best,\nDavid",
+  emailDraftMode: "preview",
   additionalInstructions: "",
 };
 
@@ -126,6 +127,9 @@ export default function SecretaryApp() {
   const [clarificationContext, setClarificationContext] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("chat");
+  const [pendingEmailDraft, setPendingEmailDraft] = useState(null);
+  const [scheduleRange, setScheduleRange] = useState("today");
+  const [scheduleSummary, setScheduleSummary] = useState("");
   const scrollViewRef = useRef(null);
   const gmailConnected = connections.email.status === "authorized";
 
@@ -166,6 +170,24 @@ export default function SecretaryApp() {
       refreshContacts(session.user.id);
     }
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!gmailConnected && (activeTab === "contacts" || activeTab === "schedule")) {
+      setActiveTab("chat");
+    }
+  }, [activeTab, gmailConnected]);
+
+  useEffect(() => {
+    if (gmailConnected && activeTab === "chat" && messages.length <= initialMessages.length) {
+      setActiveTab("schedule");
+    }
+  }, [activeTab, gmailConnected, messages.length]);
+
+  useEffect(() => {
+    if (activeTab === "schedule" && gmailConnected && !scheduleSummary) {
+      refreshScheduleSummary(scheduleRange);
+    }
+  }, [activeTab, gmailConnected, scheduleRange, scheduleSummary]);
 
   async function bootstrapAccount() {
     const result = await getCurrentSession();
@@ -533,8 +555,15 @@ export default function SecretaryApp() {
       }
 
       if (intent.action === "send_email") {
-        const result = await sendGmailMessage(getGoogleSessionId(), intent);
-        appendAssistantMessage(result.detail);
+        if (preferences.emailDraftMode === "send_immediately") {
+          const result = await sendGmailMessage(getGoogleSessionId(), intent);
+          appendAssistantMessage(result.detail);
+          setClarificationContext(null);
+          return;
+        }
+
+        setPendingEmailDraft(intent);
+        appendAssistantMessage(formatEmailDraftPreview(intent));
         setClarificationContext(null);
         return;
       }
@@ -547,6 +576,57 @@ export default function SecretaryApp() {
       );
     } catch (error) {
       appendAssistantMessage("I could not reach the assistant backend. Make sure the backend is running.");
+    } finally {
+      setLoadingKey("");
+    }
+  }
+
+  async function confirmPendingEmail() {
+    if (!pendingEmailDraft) {
+      return;
+    }
+
+    setLoadingKey("assistant");
+
+    try {
+      const result = await sendGmailMessage(getGoogleSessionId(), pendingEmailDraft);
+      appendAssistantMessage(result.detail);
+      setPendingEmailDraft(null);
+    } catch (error) {
+      appendAssistantMessage("I could not send that email. Check Gmail connection and try again.");
+    } finally {
+      setLoadingKey("");
+    }
+  }
+
+  function cancelPendingEmail() {
+    setPendingEmailDraft(null);
+    appendAssistantMessage("Draft canceled. No email was sent.");
+  }
+
+  async function refreshScheduleSummary(nextRange = scheduleRange) {
+    setScheduleRange(nextRange);
+    setLoadingKey("schedule");
+
+    try {
+      const range = getScheduleRange(nextRange);
+      const result = await listGoogleCalendarEvents(getGoogleSessionId(), {
+        action: "list_calendar_events",
+        title: `${getScheduleRangeLabel(nextRange)} schedule`,
+        start_at: range.startAt.toISOString(),
+        end_at: range.endAt.toISOString(),
+        due_at: "",
+        notes: "",
+        location: "",
+        confirmation: "",
+        email_to: "",
+        email_subject: "",
+        email_body: "",
+      });
+
+      setScheduleSummary(result.detail || "No schedule summary was returned.");
+    } catch (error) {
+      setScheduleSummary("I could not load your schedule. Check Gmail connection and try again.");
     } finally {
       setLoadingKey("");
     }
@@ -619,7 +699,11 @@ export default function SecretaryApp() {
             <View>
               <Text style={styles.kicker}>Secretary</Text>
               <Text style={styles.title}>
-                {activeTab === "contacts" ? "Contacts" : "Dona"}
+                {activeTab === "contacts"
+                  ? "Contacts"
+                  : activeTab === "schedule"
+                    ? "Schedule"
+                    : "Dona"}
               </Text>
             </View>
             <Pressable
@@ -646,6 +730,64 @@ export default function SecretaryApp() {
                 onSave={addContact}
               />
             </ScrollView>
+          ) : activeTab === "schedule" && gmailConnected ? (
+            <ScrollView
+              contentContainerStyle={styles.tabScrollContent}
+              keyboardShouldPersistTaps="handled"
+              style={styles.chatScroll}
+            >
+              <View style={styles.schedulePanel}>
+                <View style={styles.scheduleHeader}>
+                  <View>
+                    <Text style={styles.scheduleKicker}>Calendar summary</Text>
+                    <Text style={styles.scheduleTitle}>
+                      {getScheduleRangeLabel(scheduleRange)}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => refreshScheduleSummary(scheduleRange)}
+                    style={({ pressed }) => [
+                      styles.refreshButton,
+                      pressed && styles.pressedButton,
+                    ]}
+                  >
+                    {loadingKey === "schedule" ? (
+                      <ActivityIndicator color="#f8fafc" size="small" />
+                    ) : (
+                      <Text style={styles.refreshText}>Refresh</Text>
+                    )}
+                  </Pressable>
+                </View>
+
+                <View style={styles.scheduleRangeRow}>
+                  {["today", "week", "month"].map((range) => (
+                    <Pressable
+                      accessibilityRole="button"
+                      key={range}
+                      onPress={() => refreshScheduleSummary(range)}
+                      style={[
+                        styles.scheduleRangeButton,
+                        scheduleRange === range && styles.scheduleRangeButtonActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.scheduleRangeText,
+                          scheduleRange === range && styles.scheduleRangeTextActive,
+                        ]}
+                      >
+                        {getScheduleRangeLabel(range)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <Text style={styles.scheduleSummaryText}>
+                  {scheduleSummary || "Loading your schedule summary..."}
+                </Text>
+              </View>
+            </ScrollView>
           ) : (
             <>
               <ScrollView
@@ -666,6 +808,40 @@ export default function SecretaryApp() {
                   ) : null}
                 </View>
               </ScrollView>
+
+              {pendingEmailDraft ? (
+                <View style={styles.draftPanel}>
+                  <Text style={styles.draftKicker}>Email draft ready</Text>
+                  <Text style={styles.draftSubject}>
+                    {pendingEmailDraft.email_subject || "No subject"}
+                  </Text>
+                  <Text style={styles.draftRecipient}>
+                    To: {pendingEmailDraft.email_to}
+                  </Text>
+                  <View style={styles.draftActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={confirmPendingEmail}
+                      style={({ pressed }) => [
+                        styles.draftSendButton,
+                        pressed && styles.pressedButton,
+                      ]}
+                    >
+                      <Text style={styles.draftSendText}>Send email</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={cancelPendingEmail}
+                      style={({ pressed }) => [
+                        styles.draftCancelButton,
+                        pressed && styles.pressedButton,
+                      ]}
+                    >
+                      <Text style={styles.draftCancelText}>Cancel</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
 
               <View style={styles.promptPanel}>
                 <TextInput
@@ -713,6 +889,23 @@ export default function SecretaryApp() {
                   ]}
                 >
                   Chat
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setActiveTab("schedule")}
+                style={[
+                  styles.tabButton,
+                  activeTab === "schedule" && styles.tabButtonActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabButtonText,
+                    activeTab === "schedule" && styles.tabButtonTextActive,
+                  ]}
+                >
+                  Schedule
                 </Text>
               </Pressable>
               <Pressable
@@ -933,6 +1126,57 @@ function ChatBubble({ message }) {
   );
 }
 
+function getScheduleRange(range) {
+  const startAt = new Date();
+  const endAt = new Date();
+
+  if (range === "week") {
+    const day = startAt.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    startAt.setDate(startAt.getDate() + mondayOffset);
+    startAt.setHours(0, 0, 0, 0);
+    endAt.setTime(startAt.getTime());
+    endAt.setDate(startAt.getDate() + 6);
+    endAt.setHours(23, 59, 59, 999);
+    return { startAt, endAt };
+  }
+
+  if (range === "month") {
+    startAt.setDate(1);
+    startAt.setHours(0, 0, 0, 0);
+    endAt.setMonth(startAt.getMonth() + 1, 0);
+    endAt.setHours(23, 59, 59, 999);
+    return { startAt, endAt };
+  }
+
+  startAt.setHours(0, 0, 0, 0);
+  endAt.setHours(23, 59, 59, 999);
+  return { startAt, endAt };
+}
+
+function getScheduleRangeLabel(range) {
+  if (range === "week") {
+    return "Week";
+  }
+
+  if (range === "month") {
+    return "Month";
+  }
+
+  return "Today";
+}
+
+function formatEmailDraftPreview(email) {
+  return [
+    "I drafted this email and will wait before sending.",
+    "",
+    `To: ${email.email_to}`,
+    `Subject: ${email.email_subject}`,
+    "",
+    email.email_body,
+  ].join("\n");
+}
+
 function MenuIcon() {
   return (
     <View style={styles.menuIcon}>
@@ -1043,6 +1287,116 @@ const styles = StyleSheet.create({
   sendText: {
     color: "#081018",
     fontWeight: "900",
+  },
+  draftPanel: {
+    backgroundColor: "#101a29",
+    borderColor: "#8ea4ff",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    marginBottom: 10,
+    padding: 12,
+  },
+  draftKicker: {
+    color: "#8ea4ff",
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  draftSubject: {
+    color: "#f8fafc",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  draftRecipient: {
+    color: "#aeb8c8",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  draftActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 2,
+  },
+  draftSendButton: {
+    alignItems: "center",
+    backgroundColor: "#8ea4ff",
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 38,
+  },
+  draftSendText: {
+    color: "#081018",
+    fontWeight: "900",
+  },
+  draftCancelButton: {
+    alignItems: "center",
+    borderColor: "#34445f",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 38,
+    paddingHorizontal: 14,
+  },
+  draftCancelText: {
+    color: "#f8fafc",
+    fontWeight: "900",
+  },
+  schedulePanel: {
+    backgroundColor: "#101a29",
+    borderColor: "#26364f",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 14,
+    padding: 14,
+  },
+  scheduleHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  scheduleKicker: {
+    color: "#8ea4ff",
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  scheduleTitle: {
+    color: "#f8fafc",
+    fontSize: 21,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  scheduleRangeRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  scheduleRangeButton: {
+    alignItems: "center",
+    borderColor: "#34445f",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 38,
+  },
+  scheduleRangeButtonActive: {
+    backgroundColor: "#8ea4ff",
+    borderColor: "#8ea4ff",
+  },
+  scheduleRangeText: {
+    color: "#f8fafc",
+    fontWeight: "900",
+  },
+  scheduleRangeTextActive: {
+    color: "#081018",
+  },
+  scheduleSummaryText: {
+    color: "#e5ecf8",
+    fontSize: 14,
+    lineHeight: 21,
   },
   chatPanel: {
     gap: 10,
