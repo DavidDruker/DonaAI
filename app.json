@@ -17,7 +17,8 @@
           "remindersPermission": "Secretary needs reminders access to read and create reminders you request."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-font"
     ],
     "ios": {
       "supportsTablet": true,
