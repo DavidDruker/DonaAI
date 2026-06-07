@@ -222,22 +222,34 @@ async function safeSupabaseCall(callback, action) {
 
     return {
       data: result?.data || null,
-      error: result?.error || null,
+      error: result?.error
+        ? normalizeSupabaseError(result.error, action)
+        : null,
     };
   } catch (error) {
     return {
       data: null,
-      error: new Error(formatSupabaseNetworkError(error, action)),
+      error: normalizeSupabaseError(error, action),
     };
   }
+}
+
+function normalizeSupabaseError(error, action) {
+  return new Error(formatSupabaseNetworkError(error, action));
 }
 
 function formatSupabaseNetworkError(error, action) {
   const message = String(error?.message || error || "Unknown error");
 
   if (/fetch failed|network request failed|load failed/i.test(message)) {
-    return `Supabase network request failed while ${action}. Check your phone internet/VPN and EXPO_PUBLIC_SUPABASE_URL.`;
+    return `Supabase network request failed while ${action}. Check your phone internet/VPN and that this URL opens on your phone: ${getSupabaseHostForMessage()}`;
   }
 
   return message;
+}
+
+function getSupabaseHostForMessage() {
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL || "EXPO_PUBLIC_SUPABASE_URL";
+
+  return `${url.replace(/\/+$/g, "")}/auth/v1/health`;
 }
