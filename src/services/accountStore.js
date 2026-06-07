@@ -13,7 +13,10 @@ export async function getCurrentSession() {
     };
   }
 
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await safeSupabaseCall(
+    () => supabase.auth.getSession(),
+    "checking the saved login session",
+  );
 
   return {
     session: data?.session || null,
@@ -43,22 +46,42 @@ export async function signUpAccount({ email, password, name }) {
     };
   }
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: authRedirectUrl,
-      data: {
-        name,
-      },
-    },
-  });
+  const { data, error } = await safeSupabaseCall(
+    () =>
+      supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: authRedirectUrl,
+          data: {
+            name,
+          },
+        },
+      }),
+    "creating the account",
+  );
 
-  if (!error && data.user) {
-    await upsertProfile(data.user.id, {
+  if (error) {
+    return {
+      session: null,
+      user: null,
+      error,
+    };
+  }
+
+  if (data.user) {
+    const profileResult = await upsertProfile(data.user.id, {
       email,
       name,
     });
+
+    if (profileResult.error) {
+      return {
+        session: data?.session || null,
+        user: data?.user || null,
+        error: profileResult.error,
+      };
+    }
   }
 
   return {
@@ -76,10 +99,14 @@ export async function signInAccount({ email, password }) {
     };
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  const { data, error } = await safeSupabaseCall(
+    () =>
+      supabase.auth.signInWithPassword({
+        email,
+        password,
+      }),
+    "signing in",
+  );
 
   return {
     session: data?.session || null,
@@ -93,7 +120,7 @@ export async function signOutAccount() {
     return;
   }
 
-  await supabase.auth.signOut();
+  await safeSupabaseCall(() => supabase.auth.signOut(), "signing out");
 }
 
 export async function loadUserPreferences(userId) {
@@ -104,11 +131,15 @@ export async function loadUserPreferences(userId) {
     };
   }
 
-  const { data, error } = await supabase
-    .from("user_preferences")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const { data, error } = await safeSupabaseCall(
+    () =>
+      supabase
+        .from("user_preferences")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    "loading preferences",
+  );
 
   return {
     preferences: data ? mapPreferenceRow(data) : null,
@@ -123,22 +154,26 @@ export async function saveUserPreferences(userId, preferences) {
     };
   }
 
-  const { error } = await supabase.from("user_preferences").upsert(
-    {
-      user_id: userId,
-      preferred_name: preferences.name,
-      tone: preferences.tone,
-      email_formality: preferences.emailFormality,
-      email_length: preferences.emailLength,
-      default_meeting_minutes: Number(preferences.defaultMeetingMinutes) || 30,
-      email_signoff: preferences.emailSignoff,
-      email_draft_mode: preferences.emailDraftMode || "preview",
-      additional_instructions: preferences.additionalInstructions,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      onConflict: "user_id",
-    },
+  const { error } = await safeSupabaseCall(
+    () =>
+      supabase.from("user_preferences").upsert(
+        {
+          user_id: userId,
+          preferred_name: preferences.name,
+          tone: preferences.tone,
+          email_formality: preferences.emailFormality,
+          email_length: preferences.emailLength,
+          default_meeting_minutes: Number(preferences.defaultMeetingMinutes) || 30,
+          email_signoff: preferences.emailSignoff,
+          email_draft_mode: preferences.emailDraftMode || "preview",
+          additional_instructions: preferences.additionalInstructions,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id",
+        },
+      ),
+    "saving preferences",
   );
 
   return {
@@ -147,16 +182,20 @@ export async function saveUserPreferences(userId, preferences) {
 }
 
 async function upsertProfile(userId, profile) {
-  const { error } = await supabase.from("profiles").upsert(
-    {
-      id: userId,
-      email: profile.email,
-      name: profile.name,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      onConflict: "id",
-    },
+  const { error } = await safeSupabaseCall(
+    () =>
+      supabase.from("profiles").upsert(
+        {
+          id: userId,
+          email: profile.email,
+          name: profile.name,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "id",
+        },
+      ),
+    "saving the profile",
   );
 
   return {
@@ -175,4 +214,30 @@ function mapPreferenceRow(row) {
     emailDraftMode: row.email_draft_mode || "preview",
     additionalInstructions: row.additional_instructions || "",
   };
+}
+
+async function safeSupabaseCall(callback, action) {
+  try {
+    const result = await callback();
+
+    return {
+      data: result?.data || null,
+      error: result?.error || null,
+    };
+  } catch (error) {
+    return {
+      data: null,
+      error: new Error(formatSupabaseNetworkError(error, action)),
+    };
+  }
+}
+
+function formatSupabaseNetworkError(error, action) {
+  const message = String(error?.message || error || "Unknown error");
+
+  if (/fetch failed|network request failed|load failed/i.test(message)) {
+    return `Supabase network request failed while ${action}. Check your phone internet/VPN and EXPO_PUBLIC_SUPABASE_URL.`;
+  }
+
+  return message;
 }
