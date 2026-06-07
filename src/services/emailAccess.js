@@ -76,7 +76,17 @@ export async function refreshEmailConnection(accessToken = "") {
         Authorization: accessToken ? `Bearer ${accessToken}` : "",
       },
     });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      return {
+        status: "backend_error",
+        detail:
+          payload.detail ||
+          `Backend returned HTTP ${response.status}. Check the Render logs for DonaAI.`,
+        provider: payload.provider || "gmail",
+      };
+    }
 
     return {
       status: payload.status,
@@ -89,7 +99,7 @@ export async function refreshEmailConnection(accessToken = "") {
   } catch (error) {
     return {
       status: "backend_unreachable",
-      detail: `Cannot reach backend at ${backendUrl}. Start it with npm run backend.`,
+      detail: `Cannot reach backend at ${backendUrl}. Check Render is deployed and passing /health.`,
     };
   }
 }
@@ -147,4 +157,20 @@ function getStatusDetail(status) {
   }
 
   return "Gmail is not connected yet.";
+}
+
+async function readJsonResponse(response) {
+  const text = await response.text();
+
+  if (!text) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return {
+      detail: text,
+    };
+  }
 }

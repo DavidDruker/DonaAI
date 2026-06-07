@@ -20,6 +20,7 @@ const supabaseUrl = cleanEnvValue(process.env.SUPABASE_URL);
 const supabaseServiceRoleKey = cleanEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY);
 const tokenEncryptionSecret =
   cleanEnvValue(process.env.GOOGLE_TOKEN_ENCRYPTION_KEY) || googleClientSecret;
+const appVersion = "2026-06-07-auth-route-fix";
 const scopes = [
   "openid",
   "https://www.googleapis.com/auth/userinfo.profile",
@@ -62,7 +63,10 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
-      return sendJson(response, 200, { ok: true });
+      return sendJson(response, 200, {
+        ok: true,
+        version: appVersion,
+      });
     }
 
     const rateLimit = checkRateLimit(request, url);
