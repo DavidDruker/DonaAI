@@ -72,7 +72,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && url.pathname === "/auth/google/start") {
-      return startGoogleAuth(url, response);
+      return await startGoogleAuth(url, response);
     }
 
     if (request.method === "GET" && url.pathname === "/auth/google/debug") {
@@ -80,31 +80,31 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && url.pathname === "/auth/google/callback") {
-      return completeGoogleAuth(url, response);
+      return await completeGoogleAuth(url, response);
     }
 
     if (request.method === "GET" && url.pathname === "/api/email/status") {
-      return sendEmailStatus(request, url, response);
+      return await sendEmailStatus(request, url, response);
     }
 
     if (request.method === "POST" && url.pathname === "/api/assistant/action") {
-      return parseAssistantAction(request, response);
+      return await parseAssistantAction(request, response);
     }
 
     if (request.method === "POST" && url.pathname === "/api/assistant/reminder") {
-      return parseAssistantAction(request, response);
+      return await parseAssistantAction(request, response);
     }
 
     if (request.method === "POST" && url.pathname === "/api/calendar/events") {
-      return createGoogleCalendarEvent(request, response);
+      return await createGoogleCalendarEvent(request, response);
     }
 
     if (request.method === "POST" && url.pathname === "/api/calendar/events/list") {
-      return listGoogleCalendarEvents(request, response);
+      return await listGoogleCalendarEvents(request, response);
     }
 
     if (request.method === "POST" && url.pathname === "/api/email/send") {
-      return sendGmailMessage(request, response);
+      return await sendGmailMessage(request, response);
     }
 
     return sendJson(response, 404, { error: "Not found" });
