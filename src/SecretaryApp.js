@@ -50,6 +50,7 @@ import {
   loadContacts,
   saveContact,
 } from "./services/contactsStore";
+import { runConnectionDiagnostics } from "./services/connectionDiagnostics";
 import AuthScreen from "./components/AuthScreen";
 import ConfigurationScreen from "./components/ConfigurationScreen";
 import ContactsPanel from "./components/ContactsPanel";
@@ -218,6 +219,12 @@ export default function SecretaryApp() {
       [key]: value,
       ...(key === "name" ? { emailSignoff: getUpdatedSignoff(current, value) } : {}),
     }));
+  }
+
+  async function testAuthConnection() {
+    setAuthMessage("Testing connection...");
+    const result = await runConnectionDiagnostics();
+    setAuthMessage(result);
   }
 
   async function submitAuth() {
@@ -669,6 +676,7 @@ export default function SecretaryApp() {
         mode={screen}
         onChange={updateAuthField}
         onSubmit={submitAuth}
+        onTestConnection={testAuthConnection}
         onToggleMode={() => {
           setAuthMessage("");
           setScreen(screen === "signup" ? "login" : "signup");

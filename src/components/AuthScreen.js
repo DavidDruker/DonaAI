@@ -18,6 +18,7 @@ export default function AuthScreen({
   mode,
   onChange,
   onSubmit,
+  onTestConnection,
   onToggleMode,
 }) {
   const isSignup = mode === "signup";
@@ -92,6 +93,17 @@ export default function AuthScreen({
                 {isSignup ? "I already have an account" : "Create a new account"}
               </Text>
             </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={onTestConnection}
+              style={({ pressed }) => [
+                styles.connectionButton,
+                pressed && styles.pressedButton,
+              ]}
+            >
+              <Text style={styles.connectionButtonText}>Test connection</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -158,6 +170,18 @@ const styles = StyleSheet.create({
   },
   textButtonText: {
     color: "#c7d2fe",
+    fontWeight: "800",
+  },
+  connectionButton: {
+    alignItems: "center",
+    borderColor: "#34445f",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 38,
+  },
+  connectionButtonText: {
+    color: "#f8fafc",
     fontWeight: "800",
   },
   formMessage: {
