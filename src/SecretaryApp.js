@@ -134,6 +134,7 @@ export default function SecretaryApp() {
   const [scheduleEvents, setScheduleEvents] = useState([]);
   const scrollViewRef = useRef(null);
   const gmailConnected = connections.email.status === "authorized";
+  const accessToken = session?.access_token || "";
 
   useEffect(() => {
     bootstrapAccount();
@@ -392,7 +393,7 @@ export default function SecretaryApp() {
     const [calendar, reminders, email] = await Promise.all([
       loadCalendarSummary(),
       loadReminderSummary(),
-      refreshEmailConnection(),
+      refreshEmailConnection(accessToken),
     ]);
 
     if (email.status === "connected") {
@@ -442,7 +443,7 @@ export default function SecretaryApp() {
 
   async function connectEmail(providerKey) {
     setLoadingKey(providerKey);
-    const result = await startEmailAuthorization(providerKey);
+    const result = await startEmailAuthorization(providerKey, accessToken);
 
     if (result.status === "authorized") {
       setEmailConnection(result);
@@ -493,6 +494,7 @@ export default function SecretaryApp() {
         historyForBackend,
         contacts,
         preferences,
+        accessToken,
       );
 
       if (intent.action === "clarification_question") {
@@ -541,7 +543,7 @@ export default function SecretaryApp() {
       }
 
       if (intent.action === "create_calendar_event") {
-        const result = await createGoogleCalendarEvent(getGoogleSessionId(), intent);
+        const result = await createGoogleCalendarEvent(getGoogleSessionId(), intent, accessToken);
         const calendar = await loadCalendarSummary();
         setConnections((current) => ({ ...current, calendar }));
         appendAssistantMessage(result.detail);
@@ -550,7 +552,7 @@ export default function SecretaryApp() {
       }
 
       if (intent.action === "list_calendar_events") {
-        const result = await listGoogleCalendarEvents(getGoogleSessionId(), intent);
+        const result = await listGoogleCalendarEvents(getGoogleSessionId(), intent, accessToken);
         appendAssistantMessage(result.detail);
         setClarificationContext(null);
         return;
@@ -558,7 +560,7 @@ export default function SecretaryApp() {
 
       if (intent.action === "send_email") {
         if (preferences.emailDraftMode === "send_immediately") {
-          const result = await sendGmailMessage(getGoogleSessionId(), intent);
+          const result = await sendGmailMessage(getGoogleSessionId(), intent, accessToken);
           appendAssistantMessage(result.detail);
           setClarificationContext(null);
           return;
@@ -591,7 +593,7 @@ export default function SecretaryApp() {
     setLoadingKey("assistant");
 
     try {
-      const result = await sendGmailMessage(getGoogleSessionId(), pendingEmailDraft);
+      const result = await sendGmailMessage(getGoogleSessionId(), pendingEmailDraft, accessToken);
       appendAssistantMessage(result.detail);
       setPendingEmailDraft(null);
     } catch (error) {
@@ -612,19 +614,23 @@ export default function SecretaryApp() {
 
     try {
       const range = getScheduleRange(nextRange);
-      const result = await listGoogleCalendarEvents(getGoogleSessionId(), {
-        action: "list_calendar_events",
-        title: `${getRangeLabel(nextRange)} schedule`,
-        start_at: range.startAt.toISOString(),
-        end_at: range.endAt.toISOString(),
-        due_at: "",
-        notes: "",
-        location: "",
-        confirmation: "",
-        email_to: "",
-        email_subject: "",
-        email_body: "",
-      });
+      const result = await listGoogleCalendarEvents(
+        getGoogleSessionId(),
+        {
+          action: "list_calendar_events",
+          title: `${getRangeLabel(nextRange)} schedule`,
+          start_at: range.startAt.toISOString(),
+          end_at: range.endAt.toISOString(),
+          due_at: "",
+          notes: "",
+          location: "",
+          confirmation: "",
+          email_to: "",
+          email_subject: "",
+          email_body: "",
+        },
+        accessToken,
+      );
 
       setScheduleSummary(result.detail || "No schedule summary was returned.");
       setScheduleEvents(Array.isArray(result.events) ? result.events : []);

@@ -33,6 +33,7 @@ const scopes = [
 ];
 
 const sessions = new Map();
+const rateLimitBuckets = new Map();
 const maxJsonBodyBytes = 1024 * 1024;
 const researchKeywords = [
   "research",
@@ -64,6 +65,12 @@ const server = http.createServer(async (request, response) => {
       return sendJson(response, 200, { ok: true });
     }
 
+    const rateLimit = checkRateLimit(request, url);
+
+    if (!rateLimit.allowed) {
+      return sendRateLimit(response, rateLimit);
+    }
+
     if (request.method === "GET" && url.pathname === "/auth/google/start") {
       return startGoogleAuth(url, response);
     }
@@ -77,7 +84,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && url.pathname === "/api/email/status") {
-      return sendEmailStatus(url, response);
+      return sendEmailStatus(request, url, response);
     }
 
     if (request.method === "POST" && url.pathname === "/api/assistant/action") {
@@ -159,6 +166,8 @@ async function parseAssistantAction(request, response) {
       detail: "GEMINI_API_KEY is required on the backend.",
     });
   }
+
+  await requireAuthenticatedUser(request);
 
   const body = await readJsonBody(request);
   const prompt = String(body.prompt || "").trim();
@@ -677,6 +686,8 @@ function delay(milliseconds) {
 async function sendGmailMessage(request, response) {
   const body = await readJsonBody(request);
   const sessionId = String(body.sessionId || "");
+  const user = await requireAuthenticatedUser(request);
+  assertSessionBelongsToUser(sessionId, user);
   const session = await getSession(sessionId);
 
   if (!session || session.status !== "connected") {
@@ -836,6 +847,8 @@ async function checkEmailDomain(value) {
 async function createGoogleCalendarEvent(request, response) {
   const body = await readJsonBody(request);
   const sessionId = String(body.sessionId || "");
+  const user = await requireAuthenticatedUser(request);
+  assertSessionBelongsToUser(sessionId, user);
   const session = await getSession(sessionId);
 
   if (!session || session.status !== "connected") {
@@ -924,6 +937,8 @@ async function createGoogleCalendarEvent(request, response) {
 async function listGoogleCalendarEvents(request, response) {
   const body = await readJsonBody(request);
   const sessionId = String(body.sessionId || "");
+  const user = await requireAuthenticatedUser(request);
+  assertSessionBelongsToUser(sessionId, user);
   const session = await getSession(sessionId);
 
   if (!session || session.status !== "connected") {
@@ -1418,8 +1433,10 @@ async function completeGoogleAuth(url, response) {
   );
 }
 
-async function sendEmailStatus(url, response) {
+async function sendEmailStatus(request, url, response) {
   const sessionId = url.searchParams.get("sessionId");
+  const user = await requireAuthenticatedUser(request);
+  assertSessionBelongsToUser(sessionId, user);
   const session = await getSession(sessionId);
 
   if (!session) {
@@ -1727,9 +1744,149 @@ function createHttpError(statusCode, message) {
   return error;
 }
 
+async function requireAuthenticatedUser(request) {
+  if (!isSupabaseAuthConfigured()) {
+    throw createHttpError(500, "Supabase authentication is not configured on the backend.");
+  }
+
+  const token = getBearerToken(request);
+
+  if (!token) {
+    throw createHttpError(401, "Log in again before using this backend action.");
+  }
+
+  const base = supabaseUrl.replace(/\/+$/g, "");
+  const authResponse = await fetch(`${base}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseServiceRoleKey,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!authResponse.ok) {
+    throw createHttpError(401, "Your login session could not be verified.");
+  }
+
+  const user = await authResponse.json();
+
+  if (!user?.id) {
+    throw createHttpError(401, "Your login session could not be verified.");
+  }
+
+  return user;
+}
+
+function assertSessionBelongsToUser(sessionId, user) {
+  const sessionUserId = getUserIdFromSessionId(sessionId);
+
+  if (!sessionUserId || sessionUserId !== user.id) {
+    throw createHttpError(403, "This Google connection does not belong to the logged-in user.");
+  }
+}
+
+function getBearerToken(request) {
+  const header = String(request.headers.authorization || "");
+  const match = header.match(/^Bearer\s+(.+)$/i);
+
+  return match ? match[1].trim() : "";
+}
+
+function isSupabaseAuthConfigured() {
+  return Boolean(supabaseUrl && supabaseServiceRoleKey);
+}
+
+function checkRateLimit(request, url) {
+  const config = getRateLimitConfig(request.method, url.pathname);
+
+  if (!config) {
+    return {
+      allowed: true,
+    };
+  }
+
+  const now = Date.now();
+  const clientId = getClientIp(request);
+  const bucketKey = `${clientId}:${request.method}:${url.pathname}`;
+  const bucket = rateLimitBuckets.get(bucketKey);
+
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(bucketKey, {
+      count: 1,
+      resetAt: now + config.windowMs,
+    });
+    cleanupRateLimitBuckets(now);
+
+    return {
+      allowed: true,
+    };
+  }
+
+  if (bucket.count >= config.max) {
+    return {
+      allowed: false,
+      limit: config.max,
+      retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
+      resetAt: bucket.resetAt,
+    };
+  }
+
+  bucket.count += 1;
+
+  return {
+    allowed: true,
+  };
+}
+
+function getRateLimitConfig(method, pathname) {
+  if (process.env.RATE_LIMIT_DISABLED === "true") {
+    return null;
+  }
+
+  const route = `${method} ${pathname}`;
+  const minute = 60 * 1000;
+
+  const limits = {
+    "GET /auth/google/start": { max: 10, windowMs: 10 * minute },
+    "GET /auth/google/debug": { max: 20, windowMs: minute },
+    "GET /auth/google/callback": { max: 20, windowMs: minute },
+    "GET /api/email/status": { max: 120, windowMs: minute },
+    "POST /api/assistant/action": { max: 20, windowMs: minute },
+    "POST /api/assistant/reminder": { max: 20, windowMs: minute },
+    "POST /api/calendar/events": { max: 20, windowMs: minute },
+    "POST /api/calendar/events/list": { max: 60, windowMs: minute },
+    "POST /api/email/send": { max: 10, windowMs: minute },
+  };
+
+  return limits[route] || { max: 120, windowMs: minute };
+}
+
+function getClientIp(request) {
+  const forwardedFor = String(request.headers["x-forwarded-for"] || "");
+  const firstForwardedIp = forwardedFor.split(",")[0]?.trim();
+
+  return (
+    firstForwardedIp ||
+    String(request.headers["x-real-ip"] || "").trim() ||
+    request.socket?.remoteAddress ||
+    "unknown"
+  );
+}
+
+function cleanupRateLimitBuckets(now) {
+  if (rateLimitBuckets.size < 1000) {
+    return;
+  }
+
+  for (const [key, bucket] of rateLimitBuckets.entries()) {
+    if (bucket.resetAt <= now) {
+      rateLimitBuckets.delete(key);
+    }
+  }
+}
+
 function sendEmpty(response, statusCode) {
   response.writeHead(statusCode, {
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Origin": "*",
   });
@@ -1738,12 +1895,30 @@ function sendEmpty(response, statusCode) {
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Origin": "*",
     "Content-Type": "application/json",
   });
   response.end(JSON.stringify(payload));
+}
+
+function sendRateLimit(response, rateLimit) {
+  response.writeHead(429, {
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Origin": "*",
+    "Content-Type": "application/json",
+    "Retry-After": String(rateLimit.retryAfterSeconds),
+    "X-RateLimit-Limit": String(rateLimit.limit),
+    "X-RateLimit-Reset": String(Math.ceil(rateLimit.resetAt / 1000)),
+  });
+  response.end(
+    JSON.stringify({
+      status: "rate_limited",
+      detail: `Too many requests. Try again in ${rateLimit.retryAfterSeconds} seconds.`,
+    }),
+  );
 }
 
 function sendHtml(response, statusCode, html) {

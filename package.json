@@ -10,7 +10,8 @@
     "tunnel": "node backend/tunnel.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "doctor": "npx react-doctor@latest"
   },
   "engines": {
     "node": "22.x"

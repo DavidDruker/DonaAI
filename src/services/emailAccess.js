@@ -50,7 +50,7 @@ export function getEmailProviders() {
   ];
 }
 
-export async function startEmailAuthorization(providerKey) {
+export async function startEmailAuthorization(providerKey, accessToken = "") {
   if (providerKey !== "gmail") {
     return {
       status: "planned",
@@ -63,15 +63,19 @@ export async function startEmailAuthorization(providerKey) {
   )}`;
 
   await WebBrowser.openBrowserAsync(authUrl);
-  return waitForEmailConnection();
+  return waitForEmailConnection(accessToken);
 }
 
-export async function refreshEmailConnection() {
+export async function refreshEmailConnection(accessToken = "") {
   try {
     const statusUrl = `${backendUrl}/api/email/status?sessionId=${encodeURIComponent(
       getGoogleSessionId(),
     )}`;
-    const response = await fetch(statusUrl);
+    const response = await fetch(statusUrl, {
+      headers: {
+        Authorization: accessToken ? `Bearer ${accessToken}` : "",
+      },
+    });
     const payload = await response.json();
 
     return {
@@ -97,11 +101,11 @@ export function getEmailRuntimeInfo() {
   };
 }
 
-async function waitForEmailConnection() {
+async function waitForEmailConnection(accessToken = "") {
   const attempts = 8;
 
   for (let index = 0; index < attempts; index += 1) {
-    const result = await refreshEmailConnection();
+    const result = await refreshEmailConnection(accessToken);
 
     if (
       result.status === "connected" ||

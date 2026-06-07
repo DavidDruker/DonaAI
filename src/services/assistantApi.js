@@ -6,13 +6,12 @@ export async function parseAssistantPrompt(
   chatHistory = [],
   contacts = [],
   preferences = null,
+  accessToken = "",
 ) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const response = await fetch(`${backendUrl}/api/assistant/action`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getJsonHeaders(accessToken),
     body: JSON.stringify({
       prompt,
       clarificationContext,
@@ -36,13 +35,11 @@ export async function parseAssistantPrompt(
   return payload;
 }
 
-export async function createGoogleCalendarEvent(sessionId, event) {
+export async function createGoogleCalendarEvent(sessionId, event, accessToken = "") {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const response = await fetch(`${backendUrl}/api/calendar/events`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getJsonHeaders(accessToken),
     body: JSON.stringify({
       sessionId,
       event,
@@ -62,13 +59,11 @@ export async function createGoogleCalendarEvent(sessionId, event) {
   return payload;
 }
 
-export async function listGoogleCalendarEvents(sessionId, query) {
+export async function listGoogleCalendarEvents(sessionId, query, accessToken = "") {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const response = await fetch(`${backendUrl}/api/calendar/events/list`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getJsonHeaders(accessToken),
     body: JSON.stringify({
       sessionId,
       query,
@@ -88,12 +83,10 @@ export async function listGoogleCalendarEvents(sessionId, query) {
   return payload;
 }
 
-export async function sendGmailMessage(sessionId, email) {
+export async function sendGmailMessage(sessionId, email, accessToken = "") {
   const response = await fetch(`${backendUrl}/api/email/send`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getJsonHeaders(accessToken),
     body: JSON.stringify({
       sessionId,
       email,
@@ -110,4 +103,11 @@ export async function sendGmailMessage(sessionId, email) {
   }
 
   return payload;
+}
+
+function getJsonHeaders(accessToken) {
+  return {
+    Authorization: accessToken ? `Bearer ${accessToken}` : "",
+    "Content-Type": "application/json",
+  };
 }
