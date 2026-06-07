@@ -1,4 +1,9 @@
-import { supabase, supabaseConfigured } from "./supabaseClient";
+import {
+  supabase,
+  supabaseConfigured,
+  supabasePublicAnonKey,
+  supabasePublicUrl,
+} from "./supabaseClient";
 
 const authRedirectUrl =
   process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL ||
@@ -108,11 +113,79 @@ export async function signInAccount({ email, password }) {
     "signing in",
   );
 
+  if (error && isFetchFailure(error)) {
+    return signInAccountWithFetch({ email, password });
+  }
+
   return {
     session: data?.session || null,
     user: data?.user || null,
     error,
   };
+}
+
+async function signInAccountWithFetch({ email, password }) {
+  try {
+    const response = await fetch(
+      `${supabasePublicUrl.replace(/\/+$/g, "")}/auth/v1/token?grant_type=password`,
+      {
+        method: "POST",
+        headers: {
+          apikey: supabasePublicAnonKey,
+          Authorization: `Bearer ${supabasePublicAnonKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      },
+    );
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      return {
+        session: null,
+        user: null,
+        error: new Error(
+          payload.error_description ||
+            payload.msg ||
+            payload.message ||
+            `Supabase login failed with HTTP ${response.status}.`,
+        ),
+      };
+    }
+
+    const session = {
+      access_token: payload.access_token,
+      refresh_token: payload.refresh_token,
+      expires_in: payload.expires_in,
+      expires_at: payload.expires_at,
+      token_type: payload.token_type,
+      user: payload.user,
+    };
+
+    await safeSupabaseCall(
+      () =>
+        supabase.auth.setSession({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+        }),
+      "saving the login session",
+    );
+
+    return {
+      session,
+      user: payload.user || null,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      session: null,
+      user: null,
+      error: normalizeSupabaseError(error, "signing in with direct auth"),
+    };
+  }
 }
 
 export async function signOutAccount() {
@@ -238,6 +311,12 @@ function normalizeSupabaseError(error, action) {
   return new Error(formatSupabaseNetworkError(error, action));
 }
 
+function isFetchFailure(error) {
+  return /fetch failed|network request failed|load failed/i.test(
+    String(error?.message || error || ""),
+  );
+}
+
 function formatSupabaseNetworkError(error, action) {
   const message = String(error?.message || error || "Unknown error");
 
@@ -252,4 +331,20 @@ function getSupabaseHostForMessage() {
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL || "EXPO_PUBLIC_SUPABASE_URL";
 
   return `${url.replace(/\/+$/g, "")}/auth/v1/health`;
+}
+
+async function readJsonResponse(response) {
+  const text = await response.text();
+
+  if (!text) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return {
+      message: text,
+    };
+  }
 }
