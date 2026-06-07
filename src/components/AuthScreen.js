@@ -104,6 +104,8 @@ export default function AuthScreen({
             >
               <Text style={styles.connectionButtonText}>Test connection</Text>
             </Pressable>
+
+            <Text style={styles.buildText}>Build: direct-auth-login</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -183,6 +185,12 @@ const styles = StyleSheet.create({
   connectionButtonText: {
     color: "#f8fafc",
     fontWeight: "800",
+  },
+  buildText: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center",
   },
   formMessage: {
     color: "#fca5a5",

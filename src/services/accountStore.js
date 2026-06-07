@@ -104,24 +104,7 @@ export async function signInAccount({ email, password }) {
     };
   }
 
-  const { data, error } = await safeSupabaseCall(
-    () =>
-      supabase.auth.signInWithPassword({
-        email,
-        password,
-      }),
-    "signing in",
-  );
-
-  if (error && isFetchFailure(error)) {
-    return signInAccountWithFetch({ email, password });
-  }
-
-  return {
-    session: data?.session || null,
-    user: data?.user || null,
-    error,
-  };
+  return signInAccountWithFetch({ email, password });
 }
 
 async function signInAccountWithFetch({ email, password }) {
@@ -165,7 +148,7 @@ async function signInAccountWithFetch({ email, password }) {
       user: payload.user,
     };
 
-    await safeSupabaseCall(
+    const setSessionResult = await safeSupabaseCall(
       () =>
         supabase.auth.setSession({
           access_token: session.access_token,
@@ -173,6 +156,14 @@ async function signInAccountWithFetch({ email, password }) {
         }),
       "saving the login session",
     );
+
+    if (setSessionResult.error) {
+      return {
+        session,
+        user: payload.user || null,
+        error: null,
+      };
+    }
 
     return {
       session,
