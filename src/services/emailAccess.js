@@ -170,7 +170,30 @@ async function readJsonResponse(response) {
     return JSON.parse(text);
   } catch (error) {
     return {
-      detail: text,
+      detail: formatNonJsonBackendText(text),
     };
   }
+}
+
+function formatNonJsonBackendText(text) {
+  const cleanText = String(text || "").trim();
+
+  if (!cleanText) {
+    return "";
+  }
+
+  if (/^\s*<!doctype html/i.test(cleanText) || /^\s*<html/i.test(cleanText)) {
+    const title = cleanText.match(/<title>(.*?)<\/title>/is)?.[1];
+    const heading = cleanText.match(/<h1>(.*?)<\/h1>/is)?.[1];
+    const paragraph = cleanText.match(/<p>(.*?)<\/p>/is)?.[1];
+    const message = [heading || title, paragraph]
+      .filter(Boolean)
+      .join(": ")
+      .replace(/<[^>]*>/g, "")
+      .trim();
+
+    return message || "The backend returned an HTML error page. Check Render logs.";
+  }
+
+  return cleanText.length > 240 ? `${cleanText.slice(0, 237)}...` : cleanText;
 }

@@ -55,8 +55,10 @@ function cleanEnvValue(value) {
 }
 
 const server = http.createServer(async (request, response) => {
+  let url;
+
   try {
-    const url = new URL(request.url, baseUrl);
+    url = new URL(request.url, baseUrl);
 
     if (request.method === "OPTIONS") {
       return sendEmpty(response, 204);
@@ -119,6 +121,13 @@ const server = http.createServer(async (request, response) => {
       return sendJson(response, error.statusCode, {
         status: "error",
         detail: error.message,
+      });
+    }
+
+    if (url?.pathname?.startsWith("/api/")) {
+      return sendJson(response, 500, {
+        status: "error",
+        detail: "The backend hit an unexpected error. Check Render logs for details.",
       });
     }
 
