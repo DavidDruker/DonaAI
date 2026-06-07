@@ -1447,25 +1447,43 @@ async function completeGoogleAuth(url, response) {
 }
 
 async function sendEmailStatus(request, url, response) {
-  const sessionId = url.searchParams.get("sessionId");
-  const user = await requireAuthenticatedUser(request);
-  assertSessionBelongsToUser(sessionId, user);
-  const session = await getSession(sessionId);
+  try {
+    const sessionId = url.searchParams.get("sessionId");
 
-  if (!session) {
+    if (!getBearerToken(request)) {
+      return sendJson(response, 401, {
+        status: "auth_required",
+        detail: "Log in again before checking Gmail connection.",
+        provider: "gmail",
+      });
+    }
+
+    const user = await requireAuthenticatedUser(request);
+    assertSessionBelongsToUser(sessionId, user);
+    const session = await getSession(sessionId);
+
+    if (!session) {
+      return sendJson(response, 200, {
+        status: "idle",
+        detail: "No Gmail connection has been started.",
+        provider: "gmail",
+      });
+    }
+
     return sendJson(response, 200, {
-      status: "idle",
-      detail: "No Gmail connection has been started.",
+      status: session.status,
+      provider: session.provider,
+      detail: session.detail || "",
+      connectedAt: session.connectedAt || "",
+      hasRefreshToken: Boolean(session.refreshToken),
+    });
+  } catch (error) {
+    return sendJson(response, error.statusCode || 500, {
+      status: "error",
+      detail: error.message || "Gmail connection status could not be checked.",
+      provider: "gmail",
     });
   }
-
-  return sendJson(response, 200, {
-    status: session.status,
-    provider: session.provider,
-    detail: session.detail || "",
-    connectedAt: session.connectedAt || "",
-    hasRefreshToken: Boolean(session.refreshToken),
-  });
 }
 
 async function getValidGoogleAccessToken(session) {

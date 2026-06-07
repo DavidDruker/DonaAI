@@ -120,7 +120,10 @@ async function waitForEmailConnection(accessToken = "") {
     if (
       result.status === "connected" ||
       result.status === "error" ||
-      result.status === "missing_config"
+      result.status === "missing_config" ||
+      result.status === "backend_error" ||
+      result.status === "backend_unreachable" ||
+      result.status === "auth_required"
     ) {
       return result;
     }
