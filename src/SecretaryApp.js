@@ -53,6 +53,7 @@ import {
 import AuthScreen from "./components/AuthScreen";
 import ConfigurationScreen from "./components/ConfigurationScreen";
 import ContactsPanel from "./components/ContactsPanel";
+import SchedulePanel, { getRangeLabel } from "./components/SchedulePanel";
 
 const initialConnections = {
   email: getEmailAccessSummary(),
@@ -130,6 +131,7 @@ export default function SecretaryApp() {
   const [pendingEmailDraft, setPendingEmailDraft] = useState(null);
   const [scheduleRange, setScheduleRange] = useState("today");
   const [scheduleSummary, setScheduleSummary] = useState("");
+  const [scheduleEvents, setScheduleEvents] = useState([]);
   const scrollViewRef = useRef(null);
   const gmailConnected = connections.email.status === "authorized";
 
@@ -612,7 +614,7 @@ export default function SecretaryApp() {
       const range = getScheduleRange(nextRange);
       const result = await listGoogleCalendarEvents(getGoogleSessionId(), {
         action: "list_calendar_events",
-        title: `${getScheduleRangeLabel(nextRange)} schedule`,
+        title: `${getRangeLabel(nextRange)} schedule`,
         start_at: range.startAt.toISOString(),
         end_at: range.endAt.toISOString(),
         due_at: "",
@@ -625,8 +627,10 @@ export default function SecretaryApp() {
       });
 
       setScheduleSummary(result.detail || "No schedule summary was returned.");
+      setScheduleEvents(Array.isArray(result.events) ? result.events : []);
     } catch (error) {
       setScheduleSummary("I could not load your schedule. Check Gmail connection and try again.");
+      setScheduleEvents([]);
     } finally {
       setLoadingKey("");
     }
@@ -736,57 +740,14 @@ export default function SecretaryApp() {
               keyboardShouldPersistTaps="handled"
               style={styles.chatScroll}
             >
-              <View style={styles.schedulePanel}>
-                <View style={styles.scheduleHeader}>
-                  <View>
-                    <Text style={styles.scheduleKicker}>Calendar summary</Text>
-                    <Text style={styles.scheduleTitle}>
-                      {getScheduleRangeLabel(scheduleRange)}
-                    </Text>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => refreshScheduleSummary(scheduleRange)}
-                    style={({ pressed }) => [
-                      styles.refreshButton,
-                      pressed && styles.pressedButton,
-                    ]}
-                  >
-                    {loadingKey === "schedule" ? (
-                      <ActivityIndicator color="#f8fafc" size="small" />
-                    ) : (
-                      <Text style={styles.refreshText}>Refresh</Text>
-                    )}
-                  </Pressable>
-                </View>
-
-                <View style={styles.scheduleRangeRow}>
-                  {["today", "week", "month"].map((range) => (
-                    <Pressable
-                      accessibilityRole="button"
-                      key={range}
-                      onPress={() => refreshScheduleSummary(range)}
-                      style={[
-                        styles.scheduleRangeButton,
-                        scheduleRange === range && styles.scheduleRangeButtonActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.scheduleRangeText,
-                          scheduleRange === range && styles.scheduleRangeTextActive,
-                        ]}
-                      >
-                        {getScheduleRangeLabel(range)}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                <Text style={styles.scheduleSummaryText}>
-                  {scheduleSummary || "Loading your schedule summary..."}
-                </Text>
-              </View>
+              <SchedulePanel
+                detail={scheduleSummary}
+                events={scheduleEvents}
+                loading={loadingKey === "schedule"}
+                onRangeChange={refreshScheduleSummary}
+                onRefresh={refreshScheduleSummary}
+                range={scheduleRange}
+              />
             </ScrollView>
           ) : (
             <>
@@ -1154,18 +1115,6 @@ function getScheduleRange(range) {
   return { startAt, endAt };
 }
 
-function getScheduleRangeLabel(range) {
-  if (range === "week") {
-    return "Week";
-  }
-
-  if (range === "month") {
-    return "Month";
-  }
-
-  return "Today";
-}
-
 function formatEmailDraftPreview(email) {
   return [
     "I drafted this email and will wait before sending.",
@@ -1239,22 +1188,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     height: 2,
     width: 18,
-  },
-  refreshButton: {
-    alignItems: "center",
-    backgroundColor: "#152133",
-    borderColor: "#24344d",
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 40,
-    minWidth: 78,
-    paddingHorizontal: 12,
-  },
-  refreshText: {
-    color: "#f8fafc",
-    fontSize: 12,
-    fontWeight: "800",
   },
   promptPanel: {
     alignItems: "center",
@@ -1342,61 +1275,6 @@ const styles = StyleSheet.create({
   draftCancelText: {
     color: "#f8fafc",
     fontWeight: "900",
-  },
-  schedulePanel: {
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 14,
-    padding: 14,
-  },
-  scheduleHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "space-between",
-  },
-  scheduleKicker: {
-    color: "#8ea4ff",
-    fontSize: 12,
-    fontWeight: "900",
-    textTransform: "uppercase",
-  },
-  scheduleTitle: {
-    color: "#f8fafc",
-    fontSize: 21,
-    fontWeight: "900",
-    marginTop: 3,
-  },
-  scheduleRangeRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  scheduleRangeButton: {
-    alignItems: "center",
-    borderColor: "#34445f",
-    borderRadius: 8,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 38,
-  },
-  scheduleRangeButtonActive: {
-    backgroundColor: "#8ea4ff",
-    borderColor: "#8ea4ff",
-  },
-  scheduleRangeText: {
-    color: "#f8fafc",
-    fontWeight: "900",
-  },
-  scheduleRangeTextActive: {
-    color: "#081018",
-  },
-  scheduleSummaryText: {
-    color: "#e5ecf8",
-    fontSize: 14,
-    lineHeight: 21,
   },
   chatPanel: {
     gap: 10,

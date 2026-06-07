@@ -1403,7 +1403,7 @@ async function completeGoogleAuth(url, response) {
     detail: "Gmail connected.",
     connectedAt: new Date().toISOString(),
     accessToken: tokenPayload.access_token,
-    refreshToken: tokenPayload.refresh_token || "",
+    refreshToken: tokenPayload.refresh_token || session.refreshToken || "",
     expiresIn: tokenPayload.expires_in,
     expiresAt: Date.now() + Number(tokenPayload.expires_in || 0) * 1000,
   });
@@ -1440,10 +1440,7 @@ async function sendEmailStatus(url, response) {
 
 async function getValidGoogleAccessToken(session) {
   if (!session.accessToken) {
-    return {
-      ok: false,
-      detail: "Google is not connected. Reconnect Google and try again.",
-    };
+    return refreshGoogleAccessToken(session);
   }
 
   const expiresAt = Number(session.expiresAt || 0);
@@ -1456,6 +1453,17 @@ async function getValidGoogleAccessToken(session) {
     };
   }
 
+  if (!session.refreshToken) {
+    return {
+      ok: false,
+      detail: "Google access expired. Reconnect Google and try again.",
+    };
+  }
+
+  return refreshGoogleAccessToken(session);
+}
+
+async function refreshGoogleAccessToken(session) {
   if (!session.refreshToken) {
     return {
       ok: false,
@@ -1636,20 +1644,28 @@ async function supabaseRequest(method, pathAndQuery, body, extraHeaders = {}) {
 }
 
 function serializeStoredSession(sessionId, session) {
-  return {
+  const row = {
     session_id: sessionId,
     user_id: getUserIdFromSessionId(sessionId),
     status: session.status || "idle",
     provider: session.provider || "gmail",
     detail: session.detail || "",
     connected_at: session.connectedAt || null,
-    access_token: session.accessToken ? encryptText(session.accessToken) : null,
-    refresh_token: session.refreshToken ? encryptText(session.refreshToken) : null,
     expires_in: Number(session.expiresIn || 0) || null,
     expires_at: session.expiresAt ? new Date(Number(session.expiresAt)).toISOString() : null,
     scopes,
     updated_at: new Date().toISOString(),
   };
+
+  if (session.accessToken) {
+    row.access_token = encryptText(session.accessToken);
+  }
+
+  if (session.refreshToken) {
+    row.refresh_token = encryptText(session.refreshToken);
+  }
+
+  return row;
 }
 
 function getUserIdFromSessionId(sessionId) {
