@@ -238,7 +238,7 @@ export default function SecretaryApp() {
       });
 
       if (result.error) {
-        setAuthMessage(result.error.message);
+        setAuthMessage(formatUserFacingError(result.error, "creating the account"));
         return;
       }
 
@@ -263,7 +263,11 @@ export default function SecretaryApp() {
     });
 
     if (result.error || !result.session) {
-      setAuthMessage(result.error?.message || "Login failed.");
+      setAuthMessage(
+        result.error
+          ? formatUserFacingError(result.error, "signing in")
+          : "Login failed.",
+      );
       return;
     }
 
@@ -278,7 +282,7 @@ export default function SecretaryApp() {
       const result = await saveUserPreferences(session.user.id, preferences);
 
       if (result.error) {
-        setAuthMessage(result.error.message);
+        setAuthMessage(formatUserFacingError(result.error, "saving preferences"));
         return;
       }
     }
@@ -298,7 +302,7 @@ export default function SecretaryApp() {
     const result = await loadUserPreferences(userId);
 
     if (result.error) {
-      setAuthMessage(result.error.message);
+      setAuthMessage(formatUserFacingError(result.error, "loading preferences"));
       setScreen("configure");
       return;
     }
@@ -326,7 +330,7 @@ export default function SecretaryApp() {
     const result = await loadContacts(userId);
 
     if (result.error) {
-      setContactsMessage(result.error.message);
+      setContactsMessage(formatUserFacingError(result.error, "loading contacts"));
       return;
     }
 
@@ -348,7 +352,7 @@ export default function SecretaryApp() {
     const result = await saveContact(session.user.id, contact);
 
     if (result.error) {
-      setContactsMessage(result.error.message);
+      setContactsMessage(formatUserFacingError(result.error, "saving contact"));
       return false;
     }
 
@@ -360,7 +364,7 @@ export default function SecretaryApp() {
     const result = await deleteContact(contactId);
 
     if (result.error) {
-      setContactsMessage(result.error.message);
+      setContactsMessage(formatUserFacingError(result.error, "deleting contact"));
       return;
     }
 
@@ -1119,6 +1123,21 @@ function getScheduleRange(range) {
   startAt.setHours(0, 0, 0, 0);
   endAt.setHours(23, 59, 59, 999);
   return { startAt, endAt };
+}
+
+function formatUserFacingError(error, action) {
+  const message = String(error?.message || error || "Unknown error");
+
+  if (/fetch failed|network request failed|load failed/i.test(message)) {
+    return [
+      `Network request failed while ${action}.`,
+      `Supabase: ${process.env.EXPO_PUBLIC_SUPABASE_URL || "missing"}`,
+      `Backend: ${process.env.EXPO_PUBLIC_BACKEND_URL || "missing"}`,
+      "Turn off VPN/private relay, restart Expo with --clear, and try again.",
+    ].join("\n");
+  }
+
+  return message;
 }
 
 function formatEmailDraftPreview(email) {
