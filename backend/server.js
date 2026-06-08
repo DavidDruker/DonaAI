@@ -1856,12 +1856,31 @@ async function requireAuthenticatedUser(request) {
   }
 
   const base = supabaseUrl.replace(/\/+$/g, "");
-  const authResponse = await fetch(`${base}/auth/v1/user`, {
-    headers: {
-      apikey: supabaseServiceRoleKey,
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  let authResponse;
+
+  try {
+    authResponse = await fetch(`${base}/auth/v1/user`, {
+      headers: {
+        apikey: supabaseServiceRoleKey,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch (error) {
+    const hostname = getHostnameFromUrl(base) || "the configured Supabase URL";
+    const causeCode = error?.cause?.code || error?.code || "";
+
+    if (causeCode === "ENOTFOUND") {
+      throw createHttpError(
+        500,
+        `Supabase could not be reached at ${hostname}. Check SUPABASE_URL in Render for a typo.`,
+      );
+    }
+
+    throw createHttpError(
+      502,
+      `Supabase authentication could not be reached at ${hostname}. Try again in a moment.`,
+    );
+  }
 
   if (!authResponse.ok) {
     throw createHttpError(401, "Your login session could not be verified.");
@@ -1893,6 +1912,14 @@ function getBearerToken(request) {
 
 function isSupabaseAuthConfigured() {
   return Boolean(supabaseUrl && supabaseServiceRoleKey);
+}
+
+function getHostnameFromUrl(value) {
+  try {
+    return new URL(value).hostname;
+  } catch (error) {
+    return "";
+  }
 }
 
 function checkRateLimit(request, url) {
