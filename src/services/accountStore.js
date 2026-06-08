@@ -5,6 +5,7 @@ import {
   supabasePublicUrl,
 } from "./supabaseClient";
 
+const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 const authRedirectUrl =
   process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL ||
   process.env.EXPO_PUBLIC_BACKEND_URL ||
@@ -109,6 +110,10 @@ export async function signInAccount({ email, password }) {
 
 async function signInAccountWithFetch({ email, password }) {
   try {
+    if (backendUrl) {
+      return signInAccountWithBackend({ email, password });
+    }
+
     const response = await fetch(
       `${supabasePublicUrl.replace(/\/+$/g, "")}/auth/v1/token?grant_type=password`,
       {
@@ -177,6 +182,57 @@ async function signInAccountWithFetch({ email, password }) {
       error: normalizeSupabaseError(error, "signing in with direct auth"),
     };
   }
+}
+
+async function signInAccountWithBackend({ email, password }) {
+  const response = await fetch(`${backendUrl.replace(/\/+$/g, "")}/api/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      password,
+    }),
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    return {
+      session: null,
+      user: null,
+      error: new Error(
+        payload.detail ||
+          payload.message ||
+          `Backend login failed with HTTP ${response.status}.`,
+      ),
+    };
+  }
+
+  const session = payload.session;
+
+  if (!session?.access_token || !session?.refresh_token) {
+    return {
+      session: null,
+      user: null,
+      error: new Error("Backend login did not return a complete Supabase session."),
+    };
+  }
+
+  await safeSupabaseCall(
+    () =>
+      supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      }),
+    "saving the backend login session",
+  );
+
+  return {
+    session,
+    user: payload.user || session.user || null,
+    error: null,
+  };
 }
 
 export async function signOutAccount() {

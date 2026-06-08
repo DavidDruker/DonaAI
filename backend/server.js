@@ -93,6 +93,10 @@ const server = http.createServer(async (request, response) => {
       return await sendEmailStatus(request, url, response);
     }
 
+    if (request.method === "POST" && url.pathname === "/api/auth/login") {
+      return await signInWithSupabasePassword(request, response);
+    }
+
     if (request.method === "POST" && url.pathname === "/api/assistant/action") {
       return await parseAssistantAction(request, response);
     }
@@ -693,6 +697,65 @@ function needsResearch(prompt) {
 function delay(milliseconds) {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
+  });
+}
+
+async function signInWithSupabasePassword(request, response) {
+  if (!isSupabaseAuthConfigured()) {
+    return sendJson(response, 500, {
+      status: "missing_config",
+      detail: "Supabase authentication is not configured on the backend.",
+    });
+  }
+
+  const body = await readJsonBody(request);
+  const email = String(body.email || "").trim();
+  const password = String(body.password || "");
+
+  if (!isValidEmailAddress(email) || !password) {
+    return sendJson(response, 400, {
+      status: "error",
+      detail: "Email and password are required.",
+    });
+  }
+
+  const base = supabaseUrl.replace(/\/+$/g, "");
+  const authResponse = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseServiceRoleKey,
+      Authorization: `Bearer ${supabaseServiceRoleKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      password,
+    }),
+  });
+  const payload = await readJsonResponse(authResponse);
+
+  if (!authResponse.ok) {
+    return sendJson(response, authResponse.status, {
+      status: "error",
+      detail:
+        payload.error_description ||
+        payload.msg ||
+        payload.message ||
+        "Supabase login failed.",
+    });
+  }
+
+  return sendJson(response, 200, {
+    status: "ok",
+    session: {
+      access_token: payload.access_token,
+      refresh_token: payload.refresh_token,
+      expires_in: payload.expires_in,
+      expires_at: payload.expires_at,
+      token_type: payload.token_type,
+      user: payload.user,
+    },
+    user: payload.user || null,
   });
 }
 
@@ -1341,6 +1404,22 @@ function readJsonBody(request) {
   });
 }
 
+async function readJsonResponse(response) {
+  const text = await response.text();
+
+  if (!text) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return {
+      message: text,
+    };
+  }
+}
+
 function sendGoogleDebug(url, response) {
   const sessionId = url.searchParams.get("sessionId") || "debug-session";
   const params = createGoogleAuthParams(sessionId);
@@ -1450,16 +1529,6 @@ async function sendEmailStatus(request, url, response) {
   try {
     const sessionId = url.searchParams.get("sessionId");
 
-    if (!getBearerToken(request)) {
-      return sendJson(response, 401, {
-        status: "auth_required",
-        detail: "Log in again before checking Gmail connection.",
-        provider: "gmail",
-      });
-    }
-
-    const user = await requireAuthenticatedUser(request);
-    assertSessionBelongsToUser(sessionId, user);
     const session = await getSession(sessionId);
 
     if (!session) {
@@ -1880,6 +1949,7 @@ function getRateLimitConfig(method, pathname) {
     "GET /auth/google/start": { max: 10, windowMs: 10 * minute },
     "GET /auth/google/debug": { max: 20, windowMs: minute },
     "GET /auth/google/callback": { max: 20, windowMs: minute },
+    "POST /api/auth/login": { max: 10, windowMs: minute },
     "GET /api/email/status": { max: 120, windowMs: minute },
     "POST /api/assistant/action": { max: 20, windowMs: minute },
     "POST /api/assistant/reminder": { max: 20, windowMs: minute },
