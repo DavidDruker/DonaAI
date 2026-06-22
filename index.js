@@ -1,12 +1,12 @@
 import { registerRootComponent } from "expo";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import SecretaryApp from "./src/SecretaryApp";
+import DonaAIApp from "./src/DonaAIApp";
 
 function Root() {
   return (
     <SafeAreaProvider>
-      <SecretaryApp />
+      <DonaAIApp />
     </SafeAreaProvider>
   );
 }

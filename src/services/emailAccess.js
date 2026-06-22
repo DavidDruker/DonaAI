@@ -30,7 +30,7 @@ export function getEmailAccessSummary(connection) {
 
   return {
     status: "needs_oauth",
-    detail: "Connect Gmail once so Dona can use your Google mail and calendar permissions.",
+    detail: "Connect Gmail once so Dona AI can use your Google mail and calendar permissions.",
     provider: "",
   };
 }
@@ -83,7 +83,7 @@ export async function refreshEmailConnection(accessToken = "") {
         status: "backend_error",
         detail:
           payload.detail ||
-          `Backend returned HTTP ${response.status}. Check the Render logs for DonaAI.`,
+          `Backend returned HTTP ${response.status}. Check the Render logs for Dona AI.`,
         provider: payload.provider || "gmail",
       };
     }

@@ -8,6 +8,7 @@ import {
 } from "react-native";
 
 import LabeledInput from "./LabeledInput";
+import { colors } from "../theme";
 
 const emptyForm = {
   id: "",
@@ -47,7 +48,7 @@ export default function ContactsPanel({
       <View style={styles.panelHeader}>
         <Text style={styles.panelTitle}>Contacts</Text>
         <View style={styles.headerActions}>
-          {loading ? <ActivityIndicator color="#8ea4ff" size="small" /> : null}
+          {loading ? <ActivityIndicator color={colors.primary} size="small" /> : null}
           <Pressable
             accessibilityRole="button"
             onPress={() => setAdding((current) => !current)}
@@ -66,7 +67,7 @@ export default function ContactsPanel({
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>No contacts yet.</Text>
             <Text style={styles.emptyText}>
-              Add people here, then ask Dona to email them by name.
+              Add people here, then ask Dona AI to email them by name.
             </Text>
           </View>
         ) : (
@@ -137,10 +138,12 @@ export default function ContactsPanel({
 
 const styles = StyleSheet.create({
   panel: {
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
+    borderTopColor: colors.primary,
+    borderTopWidth: 3,
     gap: 12,
     padding: 12,
   },
@@ -150,7 +153,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   panelTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 20,
     fontWeight: "900",
   },
@@ -161,36 +164,37 @@ const styles = StyleSheet.create({
   },
   addToggle: {
     alignItems: "center",
-    backgroundColor: "#8ea4ff",
+    backgroundColor: colors.primary,
     borderRadius: 8,
     justifyContent: "center",
     minHeight: 34,
     paddingHorizontal: 13,
   },
   addToggleText: {
-    color: "#081018",
+    color: colors.onAccent,
     fontWeight: "900",
   },
   addPanel: {
-    borderColor: "#26364f",
+    backgroundColor: colors.surfaceHot,
+    borderColor: colors.primaryDark,
     borderRadius: 8,
     borderWidth: 1,
     gap: 12,
     padding: 12,
   },
   addPanelTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "900",
   },
   saveButton: {
     alignItems: "center",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.primary,
     borderRadius: 8,
     justifyContent: "center",
     minHeight: 38,
   },
   saveButtonText: {
-    color: "#081018",
+    color: colors.onPrimary,
     fontWeight: "900",
   },
   contactList: {
@@ -198,9 +202,12 @@ const styles = StyleSheet.create({
   },
   contactRow: {
     alignItems: "center",
-    borderColor: "#26364f",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
+    borderLeftColor: colors.cyan,
+    borderLeftWidth: 4,
     flexDirection: "row",
     gap: 8,
     padding: 12,
@@ -209,44 +216,46 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contactName: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "900",
   },
   contactEmail: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontSize: 12,
     marginTop: 3,
   },
   deleteButton: {
-    borderColor: "#34445f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
   deleteButtonText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 12,
     fontWeight: "800",
   },
   emptyText: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontSize: 13,
     lineHeight: 18,
   },
   emptyState: {
-    borderColor: "#26364f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     gap: 4,
     padding: 14,
   },
   emptyTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "900",
   },
   message: {
-    color: "#fca5a5",
+    color: colors.cyan,
     fontSize: 12,
     lineHeight: 17,
   },

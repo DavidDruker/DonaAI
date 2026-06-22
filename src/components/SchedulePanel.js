@@ -6,6 +6,8 @@ import {
   View,
 } from "react-native";
 
+import { colors } from "../theme";
+
 const ranges = ["today", "week", "month"];
 
 export default function SchedulePanel({
@@ -31,7 +33,7 @@ export default function SchedulePanel({
           style={({ pressed }) => [styles.refreshButton, pressed && styles.pressed]}
         >
           {loading ? (
-            <ActivityIndicator color="#f8fafc" size="small" />
+            <ActivityIndicator color={colors.onPrimary} size="small" />
           ) : (
             <Text style={styles.refreshText}>Refresh</Text>
           )}
@@ -172,21 +174,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   kicker: {
-    color: "#8ea4ff",
+    color: colors.cyan,
     fontSize: 12,
     fontWeight: "900",
     textTransform: "uppercase",
   },
   title: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 24,
     fontWeight: "900",
     marginTop: 3,
   },
   refreshButton: {
     alignItems: "center",
-    backgroundColor: "#152133",
-    borderColor: "#24344d",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: "center",
@@ -195,7 +197,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   refreshText: {
-    color: "#f8fafc",
+    color: colors.onPrimary,
     fontSize: 12,
     fontWeight: "800",
   },
@@ -205,7 +207,8 @@ const styles = StyleSheet.create({
   },
   rangeButton: {
     alignItems: "center",
-    borderColor: "#34445f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     flex: 1,
@@ -213,35 +216,37 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   rangeButtonActive: {
-    backgroundColor: "#8ea4ff",
-    borderColor: "#8ea4ff",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   rangeText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "900",
   },
   rangeTextActive: {
-    color: "#081018",
+    color: colors.onPrimary,
   },
   insightGrid: {
     gap: 8,
   },
   insightCard: {
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
+    borderLeftColor: colors.primary,
+    borderLeftWidth: 4,
     gap: 5,
     padding: 12,
   },
   insightLabel: {
-    color: "#8ea4ff",
+    color: colors.cyan,
     fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase",
   },
   insightValue: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "800",
     lineHeight: 20,
@@ -252,12 +257,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   sectionTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "900",
   },
   sectionCount: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontSize: 12,
     fontWeight: "800",
   },
@@ -265,10 +270,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   eventRow: {
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
+    borderLeftColor: colors.primarySoft,
+    borderLeftWidth: 4,
     flexDirection: "row",
     gap: 10,
     padding: 12,
@@ -277,12 +284,12 @@ const styles = StyleSheet.create({
     width: 82,
   },
   eventDate: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 13,
     fontWeight: "900",
   },
   eventTime: {
-    color: "#aeb8c8",
+    color: colors.cyan,
     fontSize: 11,
     fontWeight: "800",
     lineHeight: 16,
@@ -292,31 +299,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eventTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "900",
     lineHeight: 20,
   },
   eventMeta: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontSize: 12,
     lineHeight: 17,
     marginTop: 4,
   },
   emptyCard: {
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     gap: 4,
     padding: 14,
   },
   emptyTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "900",
   },
   emptyText: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontSize: 13,
     lineHeight: 18,
   },

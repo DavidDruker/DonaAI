@@ -36,6 +36,7 @@ const scopes = [
 const sessions = new Map();
 const rateLimitBuckets = new Map();
 const maxJsonBodyBytes = 1024 * 1024;
+const maxUrlLength = 2048;
 const researchKeywords = [
   "research",
   "look up",
@@ -58,6 +59,13 @@ const server = http.createServer(async (request, response) => {
   let url;
 
   try {
+    if (String(request.url || "").length > maxUrlLength) {
+      return sendJson(response, 414, {
+        status: "error",
+        detail: "Request URL is too long.",
+      });
+    }
+
     url = new URL(request.url, baseUrl);
 
     if (request.method === "OPTIONS") {
@@ -294,7 +302,7 @@ async function parseAssistantAction(request, response) {
         parts: [
           {
             text: [
-              "You are the intent and content planner for a personal secretary app.",
+              "You are the intent and content planner for a personal assistant app.",
               "Identify what the user wants, then return the structured action the app should perform.",
               "Supported actions: clarification_question, chat_response, create_reminder, create_alarm, create_calendar_event, list_calendar_events, send_email, unsupported.",
               "",
@@ -505,7 +513,7 @@ async function createResearchBrief(prompt, timezone, now) {
         parts: [
           {
             text: [
-              "Research the user's request for a personal secretary app.",
+              "Research the user's request for a personal assistant app.",
               "Return a concise factual brief that can be used to write an email.",
               "Keep it to 5 bullets or fewer unless the user explicitly asks for more depth.",
               "Include the most relevant facts, explain context when useful, and include source URLs.",
@@ -1470,7 +1478,7 @@ async function completeGoogleAuth(url, response) {
     return sendHtml(
       response,
       400,
-      page("Gmail was not connected", "You can close this page and return to Secretary."),
+      page("Gmail was not connected", "You can close this page and return to Dona AI."),
     );
   }
 
@@ -1520,7 +1528,7 @@ async function completeGoogleAuth(url, response) {
     200,
     page(
       "Gmail connected",
-      "Return to Secretary and tap Refresh if the app does not update automatically.",
+      "Return to Dona AI and tap Refresh if the app does not update automatically.",
     ),
   );
 }
@@ -1923,7 +1931,8 @@ function getHostnameFromUrl(value) {
 }
 
 function checkRateLimit(request, url) {
-  const config = getRateLimitConfig(request.method, url.pathname);
+  const routeKey = `${request.method} ${url.pathname}`;
+  const config = getRateLimitConfig(routeKey);
 
   if (!config) {
     return {
@@ -1933,7 +1942,7 @@ function checkRateLimit(request, url) {
 
   const now = Date.now();
   const clientId = getClientIp(request);
-  const bucketKey = `${clientId}:${request.method}:${url.pathname}`;
+  const bucketKey = `${clientId}:${routeKey}`;
   const bucket = rateLimitBuckets.get(bucketKey);
 
   if (!bucket || bucket.resetAt <= now) {
@@ -1964,12 +1973,11 @@ function checkRateLimit(request, url) {
   };
 }
 
-function getRateLimitConfig(method, pathname) {
+function getRateLimitConfig(route) {
   if (process.env.RATE_LIMIT_DISABLED === "true") {
     return null;
   }
 
-  const route = `${method} ${pathname}`;
   const minute = 60 * 1000;
 
   const limits = {
@@ -2014,18 +2022,22 @@ function cleanupRateLimitBuckets(now) {
 
 function sendEmpty(response, statusCode) {
   response.writeHead(statusCode, {
+    ...getCorsHeaders(),
+    ...getSecurityHeaders(),
+    ...getNoStoreHeaders(),
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Origin": "*",
   });
   response.end();
 }
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
+    ...getCorsHeaders(),
+    ...getSecurityHeaders(),
+    ...getNoStoreHeaders(),
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Origin": "*",
     "Content-Type": "application/json",
   });
   response.end(JSON.stringify(payload));
@@ -2033,9 +2045,11 @@ function sendJson(response, statusCode, payload) {
 
 function sendRateLimit(response, rateLimit) {
   response.writeHead(429, {
+    ...getCorsHeaders(),
+    ...getSecurityHeaders(),
+    ...getNoStoreHeaders(),
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Origin": "*",
     "Content-Type": "application/json",
     "Retry-After": String(rateLimit.retryAfterSeconds),
     "X-RateLimit-Limit": String(rateLimit.limit),
@@ -2051,9 +2065,34 @@ function sendRateLimit(response, rateLimit) {
 
 function sendHtml(response, statusCode, html) {
   response.writeHead(statusCode, {
+    ...getSecurityHeaders(),
+    ...getNoStoreHeaders(),
+    "Content-Security-Policy":
+      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "Content-Type": "text/html; charset=utf-8",
   });
   response.end(html);
+}
+
+function getCorsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": cleanEnvValue(process.env.CORS_ALLOW_ORIGIN) || "*",
+  };
+}
+
+function getSecurityHeaders() {
+  return {
+    "Cross-Origin-Resource-Policy": "cross-origin",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+  };
+}
+
+function getNoStoreHeaders() {
+  return {
+    "Cache-Control": "no-store",
+  };
 }
 
 function page(title, message) {
@@ -2104,7 +2143,7 @@ function escapeHtml(value) {
 }
 
 server.listen(port, host, () => {
-  console.log(`Secretary backend listening on ${baseUrl}`);
+  console.log(`DonaAI backend listening on ${baseUrl}`);
   console.log(`Google redirect URI: ${googleRedirectUri}`);
 });
 

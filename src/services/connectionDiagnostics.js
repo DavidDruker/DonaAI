@@ -1,5 +1,6 @@
 import {
   supabaseConfigured,
+  supabaseDisabled,
   supabasePublicAnonKey,
   supabasePublicUrl,
 } from "./supabaseClient";
@@ -40,6 +41,13 @@ async function checkBackend() {
 }
 
 async function checkSupabase() {
+  if (supabaseDisabled) {
+    return {
+      label: "Supabase",
+      detail: "disabled by EXPO_PUBLIC_DISABLE_SUPABASE or EXPO_PUBLIC_PORTFOLIO_MODE",
+    };
+  }
+
   if (!supabaseConfigured) {
     return {
       label: "Supabase",

@@ -1,6 +1,7 @@
 {
-  "name": "secretary-mobile",
+  "name": "donaai-mobile",
   "version": "0.1.0",
+  "description": "Portfolio-ready AI personal assistant prototype built with Expo, React Native, Node, Supabase, Google APIs, and Gemini.",
   "private": true,
   "main": "index.js",
   "scripts": {

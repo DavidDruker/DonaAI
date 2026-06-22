@@ -1,11 +1,13 @@
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
+import { colors } from "../theme";
+
 export default function LabeledInput({ label, style, ...inputProps }) {
   return (
     <View style={[styles.field, style]}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        placeholderTextColor="#707783"
+        placeholderTextColor={colors.mutedDark}
         style={[styles.fieldInput, inputProps.multiline && styles.fieldInputMultiline]}
         textAlignVertical={inputProps.multiline ? "top" : "center"}
         {...inputProps}
@@ -20,18 +22,18 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   fieldLabel: {
-    color: "#aeb8c8",
+    color: colors.cyan,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
     textTransform: "uppercase",
   },
   fieldInput: {
-    backgroundColor: "#081018",
-    borderColor: "#26364f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 15,
     minHeight: 44,
     paddingHorizontal: 12,

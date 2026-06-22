@@ -55,6 +55,7 @@ import AuthScreen from "./components/AuthScreen";
 import ConfigurationScreen from "./components/ConfigurationScreen";
 import ContactsPanel from "./components/ContactsPanel";
 import SchedulePanel, { getRangeLabel } from "./components/SchedulePanel";
+import { colors } from "./theme";
 
 const initialConnections = {
   email: getEmailAccessSummary(),
@@ -74,17 +75,17 @@ const initialMessages = [
   {
     id: "welcome",
     role: "assistant",
-    text: "Hi David. I can chat, answer questions, and help with email, calendar, reminders, and alarm-style reminders.",
+    text: "Hi there. I can chat, answer questions, and help with email, calendar, reminders, and alarm-style reminders.",
   },
 ];
 
 const defaultPreferences = {
-  name: "David",
+  name: "Alex",
   tone: "Direct and warm",
   emailFormality: "Professional",
   emailLength: "Medium",
   defaultMeetingMinutes: "30",
-  emailSignoff: "Best,\nDavid",
+  emailSignoff: "Best,\nAlex",
   emailDraftMode: "preview",
   additionalInstructions: "",
 };
@@ -98,7 +99,7 @@ function getDefaultPreferencesForName(name) {
 }
 
 function getUpdatedSignoff(current, nextName) {
-  const previousName = current.name || "David";
+  const previousName = current.name || "Alex";
   const signoffPrefix = String(current.emailSignoff || "").split("\n")[0] || "Best,";
   const presetPrefixes = new Set(["Best,", "Thanks,", "Sincerely,", "Regards,"]);
 
@@ -109,7 +110,7 @@ function getUpdatedSignoff(current, nextName) {
   return `${signoffPrefix}\n${nextName || previousName}`;
 }
 
-export default function SecretaryApp() {
+export default function DonaAIApp() {
   const [screen, setScreen] = useState("loading");
   const [authForm, setAuthForm] = useState({
     name: "",
@@ -194,16 +195,28 @@ export default function SecretaryApp() {
   }, [activeTab, gmailConnected, scheduleRange, scheduleSummary]);
 
   async function bootstrapAccount() {
-    const result = await getCurrentSession();
+    try {
+      const result = await getCurrentSession();
 
-    if (result.error || !result.session) {
+      if (result.error || !result.session) {
+        setAuthMessage(
+          result.error
+            ? `${formatUserFacingError(result.error, "checking your saved login session")}\n\nCheck the Supabase and Render environment settings before testing the demo.`
+            : "",
+        );
+        setScreen("signup");
+        return;
+      }
+
+      setSession(result.session);
+      setGoogleSessionUserId(result.session.user.id);
+      await loadAccountPreferences(result.session.user.id);
+    } catch (error) {
+      setAuthMessage(
+        `${formatUserFacingError(error, "starting Dona AI")}\n\nCheck the Supabase and Render environment settings before testing the demo.`,
+      );
       setScreen("signup");
-      return;
     }
-
-    setSession(result.session);
-    setGoogleSessionUserId(result.session.user.id);
-    await loadAccountPreferences(result.session.user.id);
   }
 
   function updateAuthField(key, value) {
@@ -380,6 +393,7 @@ export default function SecretaryApp() {
 
   async function signOut() {
     await signOutAccount();
+
     setSession(null);
     setGoogleSessionUserId("");
     setAuthForm({
@@ -389,6 +403,15 @@ export default function SecretaryApp() {
     });
     setPreferences(defaultPreferences);
     setContacts([]);
+    setContactsMessage("");
+    setConnections(initialConnections);
+    setEmailConnection(null);
+    setMessages(initialMessages);
+    setPendingEmailDraft(null);
+    setClarificationContext(null);
+    setScheduleSummary("");
+    setScheduleEvents([]);
+    setActiveTab("chat");
     setScreen("login");
   }
 
@@ -400,30 +423,60 @@ export default function SecretaryApp() {
 
   async function refreshDeviceAccess() {
     setLoadingKey("refresh");
-    const wasEmailConnected = connections.email.status === "authorized";
-    const [calendar, reminders, email] = await Promise.all([
-      loadCalendarSummary(),
-      loadReminderSummary(),
-      refreshEmailConnection(accessToken),
-    ]);
+    try {
+      const wasEmailConnected = connections.email.status === "authorized";
+      const [calendar, reminders, email] = await Promise.all([
+        safeDeviceAccess(loadCalendarSummary, {
+          status: "error",
+          detail: "Calendar status could not be checked.",
+          count: 0,
+        }),
+        safeDeviceAccess(loadReminderSummary, {
+          status: "error",
+          detail: "Reminder status could not be checked.",
+          count: 0,
+        }),
+        refreshEmailConnection(accessToken),
+      ]);
 
-    if (email.status === "connected") {
-      setEmailConnection(email);
+      if (email.status === "connected") {
+        setEmailConnection(email);
 
-      if (!wasEmailConnected) {
-        appendAssistantMessage("Gmail is connected.");
+        if (!wasEmailConnected) {
+          appendAssistantMessage("Gmail is connected.");
+        }
+      } else {
+        setEmailConnection(null);
+        setActiveTab("chat");
       }
-    } else {
-      setEmailConnection(null);
-      setActiveTab("chat");
-    }
 
-    setConnections({
-      email: getEmailAccessSummary(email),
-      calendar,
-      reminders,
-    });
-    setLoadingKey("");
+      setConnections({
+        email: getEmailAccessSummary(email),
+        calendar,
+        reminders,
+      });
+    } catch (error) {
+      setConnections({
+        email: getEmailAccessSummary({
+          status: "backend_unreachable",
+          detail: formatUserFacingError(error, "refreshing connections"),
+          provider: "gmail",
+        }),
+        calendar: {
+          status: "error",
+          detail: "Calendar status could not be checked.",
+          count: 0,
+        },
+        reminders: {
+          status: "error",
+          detail: "Reminder status could not be checked.",
+          count: 0,
+        },
+      });
+      appendAssistantMessage("Connection status could not be refreshed. Try again after checking network settings.");
+    } finally {
+      setLoadingKey("");
+    }
   }
 
   async function connectCalendar() {
@@ -621,6 +674,7 @@ export default function SecretaryApp() {
 
   async function refreshScheduleSummary(nextRange = scheduleRange) {
     setScheduleRange(nextRange);
+
     setLoadingKey("schedule");
 
     try {
@@ -668,6 +722,14 @@ export default function SecretaryApp() {
     ]);
   }
 
+  async function safeDeviceAccess(loader, fallback) {
+    try {
+      return await loader();
+    } catch (error) {
+      return fallback;
+    }
+  }
+
   if (screen === "signup" || screen === "login") {
     return (
       <AuthScreen
@@ -690,8 +752,8 @@ export default function SecretaryApp() {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" />
         <View style={styles.loadingScreen}>
-          <ActivityIndicator color="#8ea4ff" size="large" />
-          <Text style={styles.loadingText}>Loading Dona...</Text>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={styles.loadingText}>Loading Dona AI...</Text>
         </View>
       </SafeAreaView>
     );
@@ -719,13 +781,13 @@ export default function SecretaryApp() {
         <View style={styles.container}>
           <View style={styles.header}>
             <View>
-              <Text style={styles.kicker}>Secretary</Text>
+              <Text style={styles.kicker}>Dona AI</Text>
               <Text style={styles.title}>
                 {activeTab === "contacts"
                   ? "Contacts"
                   : activeTab === "schedule"
                     ? "Schedule"
-                    : "Dona"}
+                    : "Dona AI"}
               </Text>
             </View>
             <Pressable
@@ -782,7 +844,7 @@ export default function SecretaryApp() {
                   ))}
                   {loadingKey === "assistant" ? (
                     <View style={[styles.bubble, styles.assistantBubble]}>
-                      <ActivityIndicator color="#8ea4ff" size="small" />
+                      <ActivityIndicator color={colors.primary} size="small" />
                     </View>
                   ) : null}
                 </View>
@@ -824,11 +886,11 @@ export default function SecretaryApp() {
 
               <View style={styles.promptPanel}>
                 <TextInput
-                  accessibilityLabel="Secretary prompt"
+                  accessibilityLabel="Dona AI prompt"
                   multiline
                   onChangeText={setPrompt}
-                  placeholder="Message Secretary..."
-                  placeholderTextColor="#707783"
+                  placeholder="Message Dona AI..."
+                  placeholderTextColor={colors.mutedDark}
                   returnKeyType="default"
                   style={styles.input}
                   value={prompt}
@@ -842,7 +904,7 @@ export default function SecretaryApp() {
                   ]}
                 >
                   {loadingKey === "assistant" ? (
-                    <ActivityIndicator color="#081018" size="small" />
+                    <ActivityIndicator color={colors.onPrimary} size="small" />
                   ) : (
                     <Text style={styles.sendText}>Send</Text>
                   )}
@@ -949,7 +1011,7 @@ export default function SecretaryApp() {
               />
               {!gmailConnected ? (
                 <Text style={styles.drawerHelperText}>
-                  Your Dona account stores preferences and contacts. Gmail is a separate Google permission so Dona can read, send, and schedule for you.
+                  Your Dona AI account stores preferences and contacts. Gmail is a separate Google permission so Dona AI can read, send, and schedule for you.
                 </Text>
               ) : null}
               <ConnectionRow
@@ -978,7 +1040,7 @@ export default function SecretaryApp() {
                 ]}
               >
                 {loadingKey === "refresh" ? (
-                  <ActivityIndicator color="#f8fafc" size="small" />
+                  <ActivityIndicator color={colors.text} size="small" />
                 ) : (
                   <Text style={styles.drawerRefreshText}>Refresh status</Text>
                 )}
@@ -1052,7 +1114,7 @@ function ConnectionRow({
               ]}
             >
               {loadingKey === provider.key ? (
-                <ActivityIndicator color="#081018" size="small" />
+                <ActivityIndicator color={colors.onPrimary} size="small" />
               ) : (
                 <Text
                   style={[
@@ -1078,7 +1140,7 @@ function ConnectionRow({
           ]}
         >
           {loading ? (
-            <ActivityIndicator color="#081018" size="small" />
+            <ActivityIndicator color={colors.onPrimary} size="small" />
           ) : (
             <Text style={styles.drawerActionText}>{actionLabel}</Text>
           )}
@@ -1172,7 +1234,7 @@ function MenuIcon() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#081018",
+    backgroundColor: colors.background,
   },
   keyboardView: {
     flex: 1,
@@ -1189,14 +1251,14 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   kicker: {
-    color: "#8ea4ff",
+    color: colors.cyan,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
     textTransform: "uppercase",
   },
   title: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 28,
     fontWeight: "900",
     letterSpacing: 0,
@@ -1204,8 +1266,8 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     alignItems: "center",
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.primary,
     borderRadius: 8,
     borderWidth: 1,
     height: 42,
@@ -1217,15 +1279,15 @@ const styles = StyleSheet.create({
     width: 18,
   },
   menuLine: {
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.text,
     borderRadius: 2,
     height: 2,
     width: 18,
   },
   promptPanel: {
     alignItems: "center",
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
@@ -1233,7 +1295,7 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   input: {
-    color: "#f8fafc",
+    color: colors.text,
     flex: 1,
     fontSize: 15,
     maxHeight: 120,
@@ -1244,19 +1306,19 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     alignItems: "center",
-    backgroundColor: "#8ea4ff",
+    backgroundColor: colors.primary,
     borderRadius: 8,
     justifyContent: "center",
     minHeight: 42,
     paddingHorizontal: 16,
   },
   sendText: {
-    color: "#081018",
+    color: colors.onPrimary,
     fontWeight: "900",
   },
   draftPanel: {
-    backgroundColor: "#101a29",
-    borderColor: "#8ea4ff",
+    backgroundColor: colors.surfaceHot,
+    borderColor: colors.primary,
     borderRadius: 8,
     borderWidth: 1,
     gap: 8,
@@ -1264,18 +1326,18 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   draftKicker: {
-    color: "#8ea4ff",
+    color: colors.cyan,
     fontSize: 12,
     fontWeight: "900",
     textTransform: "uppercase",
   },
   draftSubject: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 15,
     fontWeight: "900",
   },
   draftRecipient: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontSize: 12,
     fontWeight: "800",
   },
@@ -1286,19 +1348,20 @@ const styles = StyleSheet.create({
   },
   draftSendButton: {
     alignItems: "center",
-    backgroundColor: "#8ea4ff",
+    backgroundColor: colors.primary,
     borderRadius: 8,
     flex: 1,
     justifyContent: "center",
     minHeight: 38,
   },
   draftSendText: {
-    color: "#081018",
+    color: colors.onPrimary,
     fontWeight: "900",
   },
   draftCancelButton: {
     alignItems: "center",
-    borderColor: "#34445f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: "center",
@@ -1306,7 +1369,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   draftCancelText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "900",
   },
   chatPanel: {
@@ -1322,8 +1385,8 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   tabBar: {
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
@@ -1339,14 +1402,14 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   tabButtonActive: {
-    backgroundColor: "#8ea4ff",
+    backgroundColor: colors.primary,
   },
   tabButtonText: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontWeight: "900",
   },
   tabButtonTextActive: {
-    color: "#081018",
+    color: colors.onPrimary,
   },
   bubble: {
     borderRadius: 8,
@@ -1356,21 +1419,21 @@ const styles = StyleSheet.create({
   },
   assistantBubble: {
     alignSelf: "flex-start",
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
     borderWidth: 1,
   },
   userBubble: {
     alignSelf: "flex-end",
-    backgroundColor: "#8ea4ff",
+    backgroundColor: colors.primary,
   },
   bubbleText: {
-    color: "#e5ecf8",
+    color: colors.textSoft,
     fontSize: 14,
     lineHeight: 21,
   },
   userBubbleText: {
-    color: "#081018",
+    color: colors.onPrimary,
     fontWeight: "700",
   },
   connectionList: {
@@ -1382,12 +1445,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   drawerScrim: {
-    backgroundColor: "rgba(0, 0, 0, 0.52)",
+    backgroundColor: colors.overlay,
     flex: 1,
   },
   drawer: {
-    backgroundColor: "#081018",
-    borderLeftColor: "#26364f",
+    backgroundColor: colors.backgroundAlt,
+    borderLeftColor: colors.primary,
     borderLeftWidth: 1,
     gap: 12,
     padding: 18,
@@ -1405,14 +1468,14 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
   drawerTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 22,
     fontWeight: "900",
   },
   closeButton: {
     alignItems: "center",
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     height: 36,
@@ -1420,15 +1483,17 @@ const styles = StyleSheet.create({
     width: 36,
   },
   closeText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 24,
     lineHeight: 26,
   },
   connectionRow: {
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
+    borderLeftColor: colors.primary,
+    borderLeftWidth: 4,
     padding: 12,
   },
   connectionRowTop: {
@@ -1437,35 +1502,35 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   statusDot: {
-    backgroundColor: "#7f8ba0",
+    backgroundColor: colors.mutedDark,
     borderRadius: 5,
     height: 10,
     width: 10,
   },
   statusDotGood: {
-    backgroundColor: "#4ade80",
+    backgroundColor: colors.cyan,
   },
   connectionTextWrap: {
     flex: 1,
   },
   connectionTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 15,
     fontWeight: "900",
   },
   connectionDetail: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontSize: 12,
     lineHeight: 17,
     marginTop: 3,
   },
   connectionState: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontSize: 11,
     fontWeight: "900",
   },
   connectionStateGood: {
-    color: "#4ade80",
+    color: colors.cyan,
   },
   drawerActionRow: {
     flexDirection: "row",
@@ -1474,7 +1539,7 @@ const styles = StyleSheet.create({
   },
   drawerActionButton: {
     alignItems: "center",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.primary,
     borderRadius: 8,
     flex: 1,
     justifyContent: "center",
@@ -1482,21 +1547,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   drawerSecondaryButton: {
-    backgroundColor: "#152133",
-    borderColor: "#34445f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderWidth: 1,
   },
   drawerSecondaryText: {
-    color: "#f8fafc",
+    color: colors.text,
   },
   drawerActionText: {
-    color: "#081018",
+    color: colors.onPrimary,
     fontWeight: "900",
   },
   drawerRefresh: {
     alignItems: "center",
-    backgroundColor: "#152133",
-    borderColor: "#26364f",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.cyan,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: "center",
@@ -1504,17 +1569,18 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   drawerRefreshText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "900",
   },
   drawerHelperText: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontSize: 12,
     lineHeight: 17,
   },
   drawerSignOut: {
     alignItems: "center",
-    borderColor: "#34445f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: "center",
@@ -1522,19 +1588,19 @@ const styles = StyleSheet.create({
   },
   drawerSecondaryAction: {
     alignItems: "center",
-    backgroundColor: "#152133",
-    borderColor: "#34445f",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: "center",
     minHeight: 40,
   },
   drawerSecondaryActionText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "900",
   },
   drawerSignOutText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "900",
   },
   loadingScreen: {
@@ -1544,7 +1610,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   loadingText: {
-    color: "#aeb8c8",
+    color: colors.muted,
     fontWeight: "800",
   },
   pressedButton: {

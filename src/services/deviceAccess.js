@@ -122,7 +122,7 @@ export async function createDeviceAlarm(intent) {
   return createDeviceReminder({
     ...intent,
     title: intent.title || "Alarm",
-    notes: intent.notes || "Alarm created by Secretary.",
+    notes: intent.notes || "Alarm created by Dona AI.",
     confirmation: intent.confirmation || `Alarm set: ${intent.title || "Alarm"}`,
   });
 }

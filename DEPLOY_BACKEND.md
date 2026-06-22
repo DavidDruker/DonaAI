@@ -1,17 +1,17 @@
-# Deploy the Backend
+# Deploy the DonaAI Backend
 
 This project can keep using Expo Go while the backend runs at a permanent public URL.
 
 The goal is to replace temporary `trycloudflare.com` links with one stable URL, such as:
 
 ```text
-https://secretary-backend.onrender.com
+https://donaai-backend.onrender.com
 ```
 
 Then Google OAuth uses one permanent redirect URI:
 
 ```text
-https://secretary-backend.onrender.com/auth/google/callback
+https://donaai-backend.onrender.com/auth/google/callback
 ```
 
 ## Render Setup

@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import LabeledInput from "./LabeledInput";
+import { colors } from "../theme";
 
 export default function AuthScreen({
   form,
@@ -35,9 +36,9 @@ export default function AuthScreen({
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.authHeader}>
-            <Text style={styles.kicker}>Dona</Text>
+            <Text style={styles.kicker}>Dona AI</Text>
             <Text style={styles.authTitle}>
-              {isSignup ? "Create your secretary profile." : "Welcome back."}
+              {isSignup ? "Create your assistant profile." : "Welcome back."}
             </Text>
           </View>
 
@@ -46,7 +47,7 @@ export default function AuthScreen({
               <LabeledInput
                 label="Name"
                 onChangeText={(value) => onChange("name", value)}
-                placeholder="David"
+                placeholder="Alex"
                 value={form.name}
               />
             ) : null}
@@ -105,7 +106,7 @@ export default function AuthScreen({
               <Text style={styles.connectionButtonText}>Test connection</Text>
             </Pressable>
 
-            <Text style={styles.buildText}>Build: direct-auth-login</Text>
+            <Text style={styles.buildText}>Render + Supabase demo build</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -116,7 +117,7 @@ export default function AuthScreen({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#081018",
+    backgroundColor: colors.background,
   },
   keyboardView: {
     flex: 1,
@@ -130,14 +131,14 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   kicker: {
-    color: "#8ea4ff",
+    color: colors.cyan,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
     textTransform: "uppercase",
   },
   authTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 30,
     fontWeight: "900",
     letterSpacing: 0,
@@ -145,23 +146,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   authPanel: {
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
+    borderTopColor: colors.primary,
+    borderTopWidth: 3,
     gap: 14,
     padding: 16,
   },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: "#8ea4ff",
+    backgroundColor: colors.primary,
     borderRadius: 8,
     justifyContent: "center",
     minHeight: 46,
     paddingHorizontal: 16,
   },
   primaryButtonText: {
-    color: "#081018",
+    color: colors.onPrimary,
     fontSize: 15,
     fontWeight: "900",
   },
@@ -171,29 +174,30 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   textButtonText: {
-    color: "#c7d2fe",
+    color: colors.cyan,
     fontWeight: "800",
   },
   connectionButton: {
     alignItems: "center",
-    borderColor: "#34445f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: "center",
     minHeight: 38,
   },
   connectionButtonText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "800",
   },
   buildText: {
-    color: "#64748b",
+    color: colors.mutedDark,
     fontSize: 11,
     fontWeight: "800",
     textAlign: "center",
   },
   formMessage: {
-    color: "#fca5a5",
+    color: colors.danger,
     fontSize: 13,
     lineHeight: 18,
   },

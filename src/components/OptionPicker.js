@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { StyleSheet, Text, View, Pressable } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+
+import { colors } from "../theme";
 
 export default function OptionPicker({ label, onChange, options, value }) {
   const [open, setOpen] = useState(false);
@@ -21,7 +23,7 @@ export default function OptionPicker({ label, onChange, options, value }) {
           <Text style={styles.dropdownText}>
             {selectedOption?.label || "Select"}
           </Text>
-          <Text style={styles.dropdownChevron}>{open ? "▲" : "▼"}</Text>
+          <Text style={styles.dropdownChevron}>{open ? "^" : "v"}</Text>
         </Pressable>
         {open ? (
           <View style={styles.dropdownMenu}>
@@ -98,7 +100,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   fieldLabel: {
-    color: "#aeb8c8",
+    color: colors.cyan,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
@@ -111,8 +113,8 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     alignItems: "center",
-    backgroundColor: "#081018",
-    borderColor: "#26364f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: "center",
@@ -120,21 +122,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
   },
   optionButtonSelected: {
-    backgroundColor: "#8ea4ff",
-    borderColor: "#8ea4ff",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   optionText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 13,
     fontWeight: "800",
   },
   optionTextSelected: {
-    color: "#081018",
+    color: colors.onPrimary,
   },
   dropdownButton: {
     alignItems: "center",
-    backgroundColor: "#081018",
-    borderColor: "#26364f",
+    backgroundColor: colors.input,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
@@ -143,39 +145,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   dropdownText: {
-    color: "#f8fafc",
+    color: colors.text,
     flex: 1,
     fontSize: 15,
     fontWeight: "800",
   },
   dropdownChevron: {
-    color: "#8ea4ff",
-    fontSize: 12,
+    color: colors.accent,
+    fontSize: 13,
     fontWeight: "900",
   },
   dropdownMenu: {
-    backgroundColor: "#081018",
-    borderColor: "#26364f",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     overflow: "hidden",
   },
   dropdownItem: {
-    borderBottomColor: "#1f2d44",
+    borderBottomColor: colors.borderSoft,
     borderBottomWidth: 1,
-    minHeight: 42,
     justifyContent: "center",
+    minHeight: 42,
     paddingHorizontal: 12,
   },
   dropdownItemSelected: {
-    backgroundColor: "#8ea4ff",
+    backgroundColor: colors.primary,
   },
   dropdownItemText: {
-    color: "#f8fafc",
+    color: colors.text,
     fontWeight: "800",
   },
   dropdownItemTextSelected: {
-    color: "#081018",
+    color: colors.onPrimary,
   },
   pressedButton: {
     opacity: 0.78,

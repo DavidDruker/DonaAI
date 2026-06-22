@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: secretary-backend
+    name: donaai-backend
     runtime: node
     plan: free
     buildCommand: npm install

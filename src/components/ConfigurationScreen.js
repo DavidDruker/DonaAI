@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import LabeledInput from "./LabeledInput";
 import OptionPicker from "./OptionPicker";
+import { colors } from "../theme";
 
 const toneOptions = [
   { label: "Direct", value: "Direct and warm" },
@@ -53,7 +54,7 @@ const durationOptions = [
 ];
 
 function getSignoffOptions(name) {
-  const cleanName = name || "David";
+  const cleanName = name || "Alex";
 
   return [
     { label: "Best", value: `Best,\n${cleanName}` },
@@ -78,13 +79,13 @@ export default function ConfigurationScreen({
   const steps = [
     {
       kicker: "Setup",
-      title: "Tell Dona who you are.",
+      title: "Tell Dona AI who you are.",
       content: (
         <>
           <LabeledInput
             label="Preferred name"
             onChangeText={(value) => onChange("name", value)}
-            placeholder="David"
+            placeholder="Alex"
             value={preferences.name}
           />
           <OptionPicker
@@ -142,7 +143,7 @@ export default function ConfigurationScreen({
     },
     {
       kicker: "Memory",
-      title: "Anything else Dona should know?",
+      title: "Anything else Dona AI should know?",
       content: (
         <LabeledInput
           label="Optional note"
@@ -197,7 +198,7 @@ export default function ConfigurationScreen({
               ]}
             >
               <Text style={styles.primaryButtonText}>
-                {isLastStep ? "Start using Dona" : "Continue"}
+                {isLastStep ? "Start using Dona AI" : "Continue"}
               </Text>
             </Pressable>
 
@@ -230,7 +231,7 @@ export default function ConfigurationScreen({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#081018",
+    backgroundColor: colors.background,
   },
   keyboardView: {
     flex: 1,
@@ -244,14 +245,14 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   kicker: {
-    color: "#8ea4ff",
+    color: colors.cyan,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
     textTransform: "uppercase",
   },
   authTitle: {
-    color: "#f8fafc",
+    color: colors.text,
     fontSize: 30,
     fontWeight: "900",
     letterSpacing: 0,
@@ -259,23 +260,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   authPanel: {
-    backgroundColor: "#101a29",
-    borderColor: "#26364f",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
+    borderTopColor: colors.cyan,
+    borderTopWidth: 3,
     gap: 14,
     padding: 16,
   },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: "#8ea4ff",
+    backgroundColor: colors.primary,
     borderRadius: 8,
     justifyContent: "center",
     minHeight: 46,
     paddingHorizontal: 16,
   },
   primaryButtonText: {
-    color: "#081018",
+    color: colors.onPrimary,
     fontSize: 15,
     fontWeight: "900",
   },
@@ -285,16 +288,16 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   textButtonText: {
-    color: "#c7d2fe",
+    color: colors.cyan,
     fontWeight: "800",
   },
   formMessage: {
-    color: "#fca5a5",
+    color: colors.danger,
     fontSize: 13,
     lineHeight: 18,
   },
   stepText: {
-    color: "#7f8ba0",
+    color: colors.muted,
     fontSize: 13,
     fontWeight: "800",
     marginTop: 8,

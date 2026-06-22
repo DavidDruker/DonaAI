@@ -15,7 +15,7 @@ export async function getCurrentSession() {
   if (!supabaseConfigured) {
     return {
       session: null,
-      error: new Error("Supabase is not configured for the mobile app."),
+      error: null,
     };
   }
 
@@ -48,7 +48,7 @@ export async function signUpAccount({ email, password, name }) {
   if (!supabaseConfigured) {
     return {
       session: null,
-      error: new Error("Supabase is not configured for the mobile app."),
+      error: new Error("Supabase is not configured. Add the Supabase URL and anon key before testing Dona AI."),
     };
   }
 
@@ -101,7 +101,7 @@ export async function signInAccount({ email, password }) {
   if (!supabaseConfigured) {
     return {
       session: null,
-      error: new Error("Supabase is not configured for the mobile app."),
+      error: new Error("Supabase is not configured. Add the Supabase URL and anon key before testing Dona AI."),
     };
   }
 
@@ -338,7 +338,11 @@ function mapPreferenceRow(row) {
 
 async function safeSupabaseCall(callback, action) {
   try {
-    const result = await callback();
+    const result = await withTimeout(
+      Promise.resolve().then(callback),
+      6000,
+      action,
+    );
 
     return {
       data: result?.data || null,
@@ -352,6 +356,20 @@ async function safeSupabaseCall(callback, action) {
       error: normalizeSupabaseError(error, action),
     };
   }
+}
+
+function withTimeout(promise, timeoutMilliseconds, action) {
+  let timeoutId;
+
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Timed out while ${action}.`));
+    }, timeoutMilliseconds);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    clearTimeout(timeoutId);
+  });
 }
 
 function normalizeSupabaseError(error, action) {
