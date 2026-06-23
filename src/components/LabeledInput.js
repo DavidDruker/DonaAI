@@ -22,7 +22,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   fieldLabel: {
-    color: colors.gold,
+    color: colors.sky,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,

@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    borderLeftColor: colors.gold,
+    borderLeftColor: colors.sky,
     borderLeftWidth: 4,
     flexDirection: "row",
     gap: 8,
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   message: {
-    color: colors.gold,
+    color: colors.sky,
     fontSize: 12,
     lineHeight: 17,
   },

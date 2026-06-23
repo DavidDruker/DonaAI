@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   fieldLabel: {
-    color: colors.gold,
+    color: colors.sky,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   dropdownChevron: {
-    color: colors.gold,
+    color: colors.sky,
     fontSize: 13,
     fontWeight: "900",
   },

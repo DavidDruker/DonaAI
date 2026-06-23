@@ -15,13 +15,16 @@ export default function SchedulePanel({
   onRangeChange,
   range,
 }) {
-  const insights = getInsights(detail);
+  const showSummary = range === "today";
+  const insights = showSummary ? getInsights(detail) : [];
 
   return (
     <View style={styles.panel}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.kicker}>Calendar summary</Text>
+          <Text style={styles.kicker}>
+            {showSummary ? "Calendar summary" : "Calendar agenda"}
+          </Text>
           <Text style={styles.title}>{getRangeLabel(range)}</Text>
         </View>
       </View>
@@ -41,23 +44,25 @@ export default function SchedulePanel({
         ))}
       </View>
 
-      <View style={styles.insightGrid}>
-        {insights.length > 0 ? (
-          insights.map((insight) => (
-            <View key={insight.label} style={styles.insightCard}>
-              <Text style={styles.insightLabel}>{insight.label}</Text>
-              <Text style={styles.insightValue}>{insight.value}</Text>
+      {showSummary ? (
+        <View style={styles.insightGrid}>
+          {insights.length > 0 ? (
+            insights.map((insight) => (
+              <View key={insight.label} style={styles.insightCard}>
+                <Text style={styles.insightLabel}>{insight.label}</Text>
+                <Text style={styles.insightValue}>{insight.value}</Text>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>No summary yet.</Text>
+              <Text style={styles.emptyText}>
+                Connect Gmail and choose a range to load your calendar summary.
+              </Text>
             </View>
-          ))
-        ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No summary yet.</Text>
-            <Text style={styles.emptyText}>
-              Connect Gmail and choose a range to load your calendar summary.
-            </Text>
-          </View>
-        )}
-      </View>
+          )}
+        </View>
+      ) : null}
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Agenda</Text>
@@ -160,7 +165,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   kicker: {
-    color: colors.gold,
+    color: colors.sky,
     fontSize: 12,
     fontWeight: "900",
     textTransform: "uppercase",
@@ -215,7 +220,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   insightLabel: {
-    color: colors.gold,
+    color: colors.sky,
     fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase",

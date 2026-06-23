@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   kicker: {
-    color: colors.gold,
+    color: colors.sky,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
