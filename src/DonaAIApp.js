@@ -182,12 +182,6 @@ export default function DonaAIApp() {
   }, [activeTab, gmailConnected]);
 
   useEffect(() => {
-    if (gmailConnected && activeTab === "chat" && messages.length <= initialMessages.length) {
-      setActiveTab("schedule");
-    }
-  }, [activeTab, gmailConnected, messages.length]);
-
-  useEffect(() => {
     if (activeTab === "schedule" && gmailConnected && !scheduleSummary) {
       refreshScheduleSummary(scheduleRange);
     }
