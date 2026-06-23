@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   fieldLabel: {
-    color: colors.cyan,
+    color: colors.gold,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
@@ -120,10 +120,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 38,
     paddingHorizontal: 11,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 7,
+    elevation: 2,
   },
   optionButtonSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   optionText: {
     color: colors.text,
@@ -143,6 +148,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     minHeight: 44,
     paddingHorizontal: 12,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 2,
   },
   dropdownText: {
     color: colors.text,
@@ -151,7 +161,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   dropdownChevron: {
-    color: colors.accent,
+    color: colors.gold,
     fontSize: 13,
     fontWeight: "900",
   },
@@ -161,6 +171,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     overflow: "hidden",
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+    elevation: 5,
   },
   dropdownItem: {
     borderBottomColor: colors.borderSoft,
@@ -170,7 +185,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   dropdownItemSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
   },
   dropdownItemText: {
     color: colors.text,

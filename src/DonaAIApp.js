@@ -50,7 +50,6 @@ import {
   loadContacts,
   saveContact,
 } from "./services/contactsStore";
-import { runConnectionDiagnostics } from "./services/connectionDiagnostics";
 import AuthScreen from "./components/AuthScreen";
 import ConfigurationScreen from "./components/ConfigurationScreen";
 import ContactsPanel from "./components/ContactsPanel";
@@ -232,12 +231,6 @@ export default function DonaAIApp() {
       [key]: value,
       ...(key === "name" ? { emailSignoff: getUpdatedSignoff(current, value) } : {}),
     }));
-  }
-
-  async function testAuthConnection() {
-    setAuthMessage("Testing connection...");
-    const result = await runConnectionDiagnostics();
-    setAuthMessage(result);
   }
 
   async function submitAuth() {
@@ -459,7 +452,7 @@ export default function DonaAIApp() {
       setConnections({
         email: getEmailAccessSummary({
           status: "backend_unreachable",
-          detail: formatUserFacingError(error, "refreshing connections"),
+          detail: formatUserFacingError(error, "updating connections"),
           provider: "gmail",
         }),
         calendar: {
@@ -473,7 +466,7 @@ export default function DonaAIApp() {
           count: 0,
         },
       });
-      appendAssistantMessage("Connection status could not be refreshed. Try again after checking network settings.");
+      appendAssistantMessage("Connection status could not be updated. Try again after checking network settings.");
     } finally {
       setLoadingKey("");
     }
@@ -525,7 +518,7 @@ export default function DonaAIApp() {
         email: getEmailAccessSummary(result),
       }));
       appendAssistantMessage(
-        `Gmail connected. Refresh token present: ${result.hasRefreshToken ? "yes" : "no"}.`,
+        `Gmail connected. Saved connection token: ${result.hasRefreshToken ? "yes" : "no"}.`,
       );
     } else {
       setConnections((current) => ({
@@ -738,7 +731,6 @@ export default function DonaAIApp() {
         mode={screen}
         onChange={updateAuthField}
         onSubmit={submitAuth}
-        onTestConnection={testAuthConnection}
         onToggleMode={() => {
           setAuthMessage("");
           setScreen(screen === "signup" ? "login" : "signup");
@@ -823,9 +815,7 @@ export default function DonaAIApp() {
               <SchedulePanel
                 detail={scheduleSummary}
                 events={scheduleEvents}
-                loading={loadingKey === "schedule"}
                 onRangeChange={refreshScheduleSummary}
-                onRefresh={refreshScheduleSummary}
                 range={scheduleRange}
               />
             </ScrollView>
@@ -1033,20 +1023,6 @@ export default function DonaAIApp() {
 
               <Pressable
                 accessibilityRole="button"
-                onPress={refreshDeviceAccess}
-                style={({ pressed }) => [
-                  styles.drawerRefresh,
-                  pressed && styles.pressedButton,
-                ]}
-              >
-                {loadingKey === "refresh" ? (
-                  <ActivityIndicator color={colors.text} size="small" />
-                ) : (
-                  <Text style={styles.drawerRefreshText}>Refresh status</Text>
-                )}
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
                 onPress={openConfiguration}
                 style={({ pressed }) => [
                   styles.drawerSecondaryAction,
@@ -1251,7 +1227,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   kicker: {
-    color: colors.cyan,
+    color: colors.gold,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
@@ -1267,12 +1243,17 @@ const styles = StyleSheet.create({
   menuButton: {
     alignItems: "center",
     backgroundColor: colors.surfaceRaised,
-    borderColor: colors.primary,
+    borderColor: colors.accent,
     borderRadius: 8,
     borderWidth: 1,
     height: 42,
     justifyContent: "center",
     width: 46,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 4,
   },
   menuIcon: {
     gap: 5,
@@ -1293,6 +1274,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     padding: 10,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    elevation: 5,
   },
   input: {
     color: colors.text,
@@ -1311,6 +1297,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 42,
     paddingHorizontal: 16,
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 4,
   },
   sendText: {
     color: colors.onPrimary,
@@ -1318,15 +1309,20 @@ const styles = StyleSheet.create({
   },
   draftPanel: {
     backgroundColor: colors.surfaceHot,
-    borderColor: colors.primary,
+    borderColor: colors.accent,
     borderRadius: 8,
     borderWidth: 1,
     gap: 8,
     marginBottom: 10,
     padding: 12,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    elevation: 6,
   },
   draftKicker: {
-    color: colors.cyan,
+    color: colors.gold,
     fontSize: 12,
     fontWeight: "900",
     textTransform: "uppercase",
@@ -1348,7 +1344,7 @@ const styles = StyleSheet.create({
   },
   draftSendButton: {
     alignItems: "center",
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     borderRadius: 8,
     flex: 1,
     justifyContent: "center",
@@ -1393,6 +1389,11 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 10,
     padding: 6,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 4,
   },
   tabButton: {
     alignItems: "center",
@@ -1402,7 +1403,7 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   tabButtonActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
   },
   tabButtonText: {
     color: colors.muted,
@@ -1422,10 +1423,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceRaised,
     borderColor: colors.border,
     borderWidth: 1,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 2,
   },
   userBubble: {
     alignSelf: "flex-end",
     backgroundColor: colors.primary,
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 2,
   },
   bubbleText: {
     color: colors.textSoft,
@@ -1450,12 +1461,15 @@ const styles = StyleSheet.create({
   },
   drawer: {
     backgroundColor: colors.backgroundAlt,
-    borderLeftColor: colors.primary,
-    borderLeftWidth: 1,
     gap: 12,
     padding: 18,
     paddingTop: 54,
     width: 320,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: -10, height: 0 },
+    shadowOpacity: 0.38,
+    shadowRadius: 24,
+    elevation: 12,
   },
   drawerHeader: {
     alignItems: "center",
@@ -1481,6 +1495,11 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: "center",
     width: 36,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.18,
+    shadowRadius: 9,
+    elevation: 3,
   },
   closeText: {
     color: colors.text,
@@ -1492,9 +1511,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    borderLeftColor: colors.primary,
-    borderLeftWidth: 4,
     padding: 12,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 13,
+    elevation: 3,
   },
   connectionRowTop: {
     alignItems: "center",
@@ -1508,7 +1530,7 @@ const styles = StyleSheet.create({
     width: 10,
   },
   statusDotGood: {
-    backgroundColor: colors.cyan,
+    backgroundColor: colors.teal,
   },
   connectionTextWrap: {
     flex: 1,
@@ -1530,7 +1552,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   connectionStateGood: {
-    color: colors.cyan,
+    color: colors.teal,
   },
   drawerActionRow: {
     flexDirection: "row",
@@ -1539,7 +1561,7 @@ const styles = StyleSheet.create({
   },
   drawerActionButton: {
     alignItems: "center",
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     borderRadius: 8,
     flex: 1,
     justifyContent: "center",
@@ -1556,20 +1578,6 @@ const styles = StyleSheet.create({
   },
   drawerActionText: {
     color: colors.onPrimary,
-    fontWeight: "900",
-  },
-  drawerRefresh: {
-    alignItems: "center",
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.cyan,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: "center",
-    marginTop: 12,
-    minHeight: 40,
-  },
-  drawerRefreshText: {
-    color: colors.text,
     fontWeight: "900",
   },
   drawerHelperText: {
@@ -1594,6 +1602,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: "center",
     minHeight: 40,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 2,
   },
   drawerSecondaryActionText: {
     color: colors.text,

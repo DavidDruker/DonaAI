@@ -19,7 +19,6 @@ export default function AuthScreen({
   mode,
   onChange,
   onSubmit,
-  onTestConnection,
   onToggleMode,
 }) {
   const isSignup = mode === "signup";
@@ -94,19 +93,6 @@ export default function AuthScreen({
                 {isSignup ? "I already have an account" : "Create a new account"}
               </Text>
             </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={onTestConnection}
-              style={({ pressed }) => [
-                styles.connectionButton,
-                pressed && styles.pressedButton,
-              ]}
-            >
-              <Text style={styles.connectionButtonText}>Test connection</Text>
-            </Pressable>
-
-            <Text style={styles.buildText}>Render + Supabase demo build</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -126,12 +112,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     padding: 20,
+    backgroundColor: colors.background,
   },
   authHeader: {
     marginBottom: 22,
   },
   kicker: {
-    color: colors.cyan,
+    color: colors.gold,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
@@ -150,10 +137,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    borderTopColor: colors.primary,
-    borderTopWidth: 3,
+    borderTopColor: colors.accent,
+    borderTopWidth: 4,
     gap: 14,
     padding: 16,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.38,
+    shadowRadius: 28,
+    elevation: 10,
   },
   primaryButton: {
     alignItems: "center",
@@ -162,6 +154,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 46,
     paddingHorizontal: 16,
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
+    elevation: 5,
   },
   primaryButtonText: {
     color: colors.onPrimary,
@@ -176,25 +173,6 @@ const styles = StyleSheet.create({
   textButtonText: {
     color: colors.cyan,
     fontWeight: "800",
-  },
-  connectionButton: {
-    alignItems: "center",
-    backgroundColor: colors.input,
-    borderColor: colors.border,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 38,
-  },
-  connectionButtonText: {
-    color: colors.text,
-    fontWeight: "800",
-  },
-  buildText: {
-    color: colors.mutedDark,
-    fontSize: 11,
-    fontWeight: "800",
-    textAlign: "center",
   },
   formMessage: {
     color: colors.danger,

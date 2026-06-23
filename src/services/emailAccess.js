@@ -134,7 +134,7 @@ async function waitForEmailConnection(accessToken = "") {
   return {
     status: "pending",
     detail:
-      "Gmail sign-in opened in the browser. If you finished signing in, tap Refresh to confirm the connection.",
+      "Gmail sign-in opened in the browser. If you finished signing in, return to Dona AI and reopen Connect to confirm the connection.",
     provider: "gmail",
     providerName: "Gmail",
   };

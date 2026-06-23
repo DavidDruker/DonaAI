@@ -5,8 +5,9 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "expo:start": "expo start",
+    "start": "expo start --clear --go --tunnel",
+    "expo:start": "expo start --clear --go",
+    "expo:tunnel": "expo start --clear --go --tunnel",
     "backend": "node backend/server.js",
     "tunnel": "node backend/tunnel.js",
     "android": "expo start --android",

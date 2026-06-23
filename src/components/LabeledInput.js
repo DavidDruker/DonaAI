@@ -22,7 +22,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   fieldLabel: {
-    color: colors.cyan,
+    color: colors.gold,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0,
@@ -37,6 +37,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     minHeight: 44,
     paddingHorizontal: 12,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 2,
   },
   fieldInputMultiline: {
     minHeight: 84,

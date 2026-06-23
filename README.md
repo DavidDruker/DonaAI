@@ -73,10 +73,16 @@ For the portfolio demo, point `EXPO_PUBLIC_BACKEND_URL` at the Render URL instea
 Start Expo:
 
 ```bash
-npx expo start --clear
+npm start
 ```
 
-Open the app with Expo Go, an emulator, or a development build.
+This starts Expo Go in tunnel mode, which is the most reliable QR option when a phone cannot reach your computer over LAN.
+
+For local LAN mode instead:
+
+```bash
+npm run expo:start
+```
 
 ## Environment
 

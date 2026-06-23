@@ -1,5 +1,4 @@
 import {
-  ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
@@ -13,8 +12,6 @@ const ranges = ["today", "week", "month"];
 export default function SchedulePanel({
   detail,
   events,
-  loading,
-  onRefresh,
   onRangeChange,
   range,
 }) {
@@ -27,17 +24,6 @@ export default function SchedulePanel({
           <Text style={styles.kicker}>Calendar summary</Text>
           <Text style={styles.title}>{getRangeLabel(range)}</Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => onRefresh(range)}
-          style={({ pressed }) => [styles.refreshButton, pressed && styles.pressed]}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.onPrimary} size="small" />
-          ) : (
-            <Text style={styles.refreshText}>Refresh</Text>
-          )}
-        </Pressable>
       </View>
 
       <View style={styles.rangeRow}>
@@ -67,7 +53,7 @@ export default function SchedulePanel({
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No summary yet.</Text>
             <Text style={styles.emptyText}>
-              Tap Refresh to load your calendar summary.
+              Connect Gmail and choose a range to load your calendar summary.
             </Text>
           </View>
         )}
@@ -165,7 +151,7 @@ function formatEventTime(event) {
 
 const styles = StyleSheet.create({
   panel: {
-    gap: 14,
+    gap: 16,
   },
   header: {
     alignItems: "center",
@@ -174,7 +160,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   kicker: {
-    color: colors.cyan,
+    color: colors.gold,
     fontSize: 12,
     fontWeight: "900",
     textTransform: "uppercase",
@@ -184,22 +170,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "900",
     marginTop: 3,
-  },
-  refreshButton: {
-    alignItems: "center",
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 40,
-    minWidth: 78,
-    paddingHorizontal: 12,
-  },
-  refreshText: {
-    color: colors.onPrimary,
-    fontSize: 12,
-    fontWeight: "800",
   },
   rangeRow: {
     flexDirection: "row",
@@ -216,8 +186,8 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   rangeButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   rangeText: {
     color: colors.text,
@@ -234,13 +204,18 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    borderLeftColor: colors.primary,
+    borderLeftColor: colors.cyan,
     borderLeftWidth: 4,
     gap: 5,
     padding: 12,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 4,
   },
   insightLabel: {
-    color: colors.cyan,
+    color: colors.gold,
     fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase",
@@ -270,15 +245,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   eventRow: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceRaised,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    borderLeftColor: colors.primarySoft,
+    borderLeftColor: colors.accent,
     borderLeftWidth: 4,
     flexDirection: "row",
     gap: 10,
     padding: 12,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 3,
   },
   eventTimeBlock: {
     width: 82,
@@ -317,6 +297,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 4,
     padding: 14,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 2,
   },
   emptyTitle: {
     color: colors.text,
