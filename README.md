@@ -1,3 +1,6 @@
+
+https://github.com/user-attachments/assets/22253e17-d5e7-4f8a-885d-9f6f9f95202b
+
 # DonaAI
 
 DonaAI is a mobile AI personal assistant prototype built with Expo and React Native. It helps a user draft email, review their schedule, create reminders, and coordinate calendar actions through a conversational interface.
